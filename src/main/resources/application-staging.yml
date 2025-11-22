@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: ${REDGUARD_STAGING_DB_URL:jdbc:postgresql://staging-db:5432/redguard}
+    username: ${REDGUARD_STAGING_DB_USERNAME:redguard}
+    password: ${REDGUARD_STAGING_DB_PASSWORD:redguard}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  data:
+    redis:
+      host: ${REDGUARD_STAGING_REDIS_HOST:staging-redis}
+      port: ${REDGUARD_STAGING_REDIS_PORT:6379}
+      ssl:
+        enabled: false
+
+redguard:
+  rate-limit:
+    fallback-policy: ALLOW_ALL
+
+logging:
+  level:
+    com.redguard: INFO

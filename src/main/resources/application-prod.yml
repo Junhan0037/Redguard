@@ -1,0 +1,30 @@
+spring:
+  datasource:
+    url: ${REDGUARD_DB_URL}
+    username: ${REDGUARD_DB_USERNAME}
+    password: ${REDGUARD_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  data:
+    redis:
+      host: ${REDGUARD_REDIS_HOST}
+      port: ${REDGUARD_REDIS_PORT:6379}
+      password: ${REDGUARD_REDIS_PASSWORD:}
+      ssl:
+        enabled: true
+      timeout: 2000
+
+server:
+  shutdown: graceful
+
+redguard:
+  rate-limit:
+    fallback-policy: ALLOW_ALL
+
+logging:
+  level:
+    root: INFO
+    com.redguard: INFO

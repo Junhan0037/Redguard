@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: redguard
+  profiles:
+    default: dev
+
+server:
+  shutdown: graceful # 종료 시 기존 요청을 모두 처리하고 종료
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.redguard: DEBUG
