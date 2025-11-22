@@ -17,7 +17,7 @@ class HealthControllerTest(
 ) {
 
     @Test
-    fun `should return health status`() {
+    fun `헬스체크_API가_UP_상태를_반환한다`() {
         mockMvc.get("/internal/health")
             .andExpect {
                 status { isOk() }

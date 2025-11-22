@@ -36,7 +36,7 @@ class RepositoryIntegrationTest(
 ) {
 
     @Test
-    fun `should persist and query rate-limit domain aggregates`() {
+    fun `레포지토리_저장_조회가_정상적으로_동작한다`() {
         val plan = planRepository.save(
             Plan(
                 name = "PRO",
