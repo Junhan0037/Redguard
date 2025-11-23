@@ -1,0 +1,75 @@
+version: "3.9"
+name: redguard
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: redguard-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-redguard}
+      POSTGRES_USER: ${POSTGRES_USER:-redguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-redguard}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      TZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-redguard} -d $${POSTGRES_DB:-redguard}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: redguard-redis
+    command: >
+      sh -c '
+        redis-server
+          --requirepass "$${REDIS_PASSWORD}"
+          --appendonly yes
+          --appendfsync everysec
+          --save 60 1000
+          --dir /data
+          --tcp-keepalive 60
+          --protected-mode yes
+          --loglevel notice
+          --maxclients 10000
+          --rename-command CONFIG ""
+          --rename-command FLUSHALL ""
+      '
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redguard}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redguard}", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: redguard-redis-insight
+    depends_on:
+      - redis
+    ports:
+      - "5540:5540"
+    environment:
+      RI_HOST: "0.0.0.0"
+      RI_PORT: "5540"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redguard}
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+    name: redguard-redis-data
+  postgres-data:
+    name: redguard-postgres-data
