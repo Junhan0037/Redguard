@@ -11,23 +11,29 @@ import java.time.temporal.ChronoUnit
  */
 enum class RateLimitWindow(
     private val formatter: DateTimeFormatter,
-    private val truncateUnit: ChronoUnit
+    private val truncateUnit: ChronoUnit,
+    val durationSeconds: Long
 ) {
     SECOND(
         formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneOffset.UTC),
-        truncateUnit = ChronoUnit.SECONDS
+        truncateUnit = ChronoUnit.SECONDS,
+        durationSeconds = 1L
     ),
     MINUTE(
         formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmm").withZone(ZoneOffset.UTC),
-        truncateUnit = ChronoUnit.MINUTES
+        truncateUnit = ChronoUnit.MINUTES,
+        durationSeconds = 60L
     ),
     DAY(
         formatter = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneOffset.UTC),
-        truncateUnit = ChronoUnit.DAYS
+        truncateUnit = ChronoUnit.DAYS,
+        durationSeconds = 86_400L
     );
 
     fun bucket(timestamp: Instant): String {
         val truncated = timestamp.truncatedTo(truncateUnit)
         return formatter.format(truncated)
     }
+
+    fun bucketStart(timestamp: Instant): Instant = timestamp.truncatedTo(truncateUnit)
 }

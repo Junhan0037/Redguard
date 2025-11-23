@@ -6,13 +6,15 @@ import com.redguard.domain.ratelimit.QuotaPeriod
 import com.redguard.domain.ratelimit.RateLimitWindow
 import com.redguard.domain.ratelimit.RedisKeyDimensions
 import java.time.Instant
+import org.springframework.stereotype.Component
 
 /**
- * Redis 키 네이밍 규칙을 만족하는 키를 생성
+ * Redis 키 네이밍 규칙을 만족하는 키를 생성한다.
  * - 스코프별 필수 파라미터 검증
  * - API 경로 정규화 및 구분자(`:`) 차단
  * - 미사용 필드 플레이스홀더(`-`, `*`) 적용
  */
+@Component
 class RedisKeyBuilder(
     private val notApplicablePlaceholder: String = "-",
     private val apiWildcardPlaceholder: String = "*"
