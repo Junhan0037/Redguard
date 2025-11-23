@@ -6,12 +6,14 @@ import com.redguard.domain.ratelimit.QuotaPeriod
 import com.redguard.domain.ratelimit.RateLimitWindow
 import com.redguard.domain.ratelimit.RedisKeyDimensions
 import com.redguard.infrastructure.redis.script.RateLimitLuaScript
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 import org.springframework.data.redis.core.StringRedisTemplate
+import org.springframework.data.redis.RedisSystemException
 import org.springframework.stereotype.Component
 
 /**
@@ -22,11 +24,12 @@ import org.springframework.stereotype.Component
 @Component
 class RateLimitLuaExecutor(
     private val redisTemplate: StringRedisTemplate,
-    private val redisKeyBuilder: RedisKeyBuilder
+    private val redisKeyBuilder: RedisKeyBuilder,
+    private val scriptInitializer: RateLimitScriptInitializer
 ) {
 
-    // Spring RedisScript 객체 (Lua 소스는 RateLimitLuaScript.SOURCE)
-    private val script = RateLimitLuaScript.redisScript()
+    private val logger = KotlinLogging.logger {}
+    private val script = RateLimitLuaScript.redisScript() // Spring RedisScript 객체 (Lua 소스는 RateLimitLuaScript.SOURCE)
 
     @Suppress("SENSELESS_COMPARISON")
     fun evaluate(request: RateLimitScriptRequest): RateLimitScriptResult {
@@ -35,26 +38,48 @@ class RateLimitLuaExecutor(
             throw RedGuardException(ErrorCode.INVALID_REQUEST, "증가량은 1 이상이어야 합니다.")
         }
 
+        // NOSCRIPT로 인한 캐시 미스 대비: 사전 로드
+        scriptInitializer.ensureLoaded()
+
         // Lua 실행 키/인자 구성
         val payload = buildPayload(request)
 
-        // Redis Lua 스크립트 실행
-        val rawResult = redisTemplate.execute(
-            script,
-            payload.keys,
-            *payload.args.toTypedArray()
-        )
+        val rawResult = executeWithRetry(payload)
+        return mapResult(request, rawResult)
+    }
 
+    /**
+     * NOSCRIPT 발생 시 스크립트를 재로딩하고 한 번 더 실행해 멀티 인스턴스간 SHA 불일치에 대응
+     */
+    private fun executeWithRetry(payload: RateLimitScriptPayload): List<Long> {
+        val args = payload.args.toTypedArray()
+        try {
+            val rawResult = redisTemplate.execute(script, payload.keys, *args)
+            return validateResult(rawResult)
+        } catch (ex: RedisSystemException) {
+            if (!isNoScript(ex)) {
+                throw RedGuardException(ErrorCode.INTERNAL_SERVER_ERROR, "Redis Lua 스크립트 실행 중 오류가 발생했습니다.", ex)
+            }
+            logger.warn(ex) { "Redis에 Lua 스크립트 SHA가 존재하지 않아 재로딩 후 재시도합니다." }
+
+            scriptInitializer.reload()
+
+            val retryResult = redisTemplate.execute(script, payload.keys, *args)
+            return validateResult(retryResult)
+        }
+    }
+
+    /**
+     * Lua 결과가 null이거나 기대 길이보다 짧으면 즉시 예외로 전환
+     */
+    private fun validateResult(rawResult: List<Long>?): List<Long> {
         if (rawResult == null) {
             throw RedGuardException(ErrorCode.INTERNAL_SERVER_ERROR, "Redis Lua 스크립트 실행 결과가 없습니다.")
         }
-
-        // 예상되는 반환 배열 길이 검증
         if (rawResult.size < 16) {
             throw RedGuardException(ErrorCode.INTERNAL_SERVER_ERROR, "Redis Lua 스크립트 결과 형식이 올바르지 않습니다.")
         }
-
-        return mapResult(request, rawResult)
+        return rawResult
     }
 
     /**
@@ -202,6 +227,15 @@ class RateLimitLuaExecutor(
      * limit null/0/음수는 비활성화(-1)로 변환
      */
     private fun normalizedLimit(limit: Long?): Long = limit?.takeIf { it > 0 } ?: -1
+
+    /**
+     * RedisSystemException이 NOSCRIPT 계열인지 확인
+     */
+    private fun isNoScript(exception: RedisSystemException): Boolean {
+        val message = exception.message?.lowercase() ?: ""
+        val causeMessage = exception.cause?.message?.lowercase() ?: ""
+        return message.contains("noscript") || causeMessage.contains("noscript")
+    }
 }
 
 data class RateLimitScriptRequest(

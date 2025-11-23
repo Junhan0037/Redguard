@@ -2,6 +2,7 @@ package com.redguard.infrastructure.redis
 
 import com.redguard.domain.ratelimit.RateLimitScope
 import com.redguard.domain.ratelimit.RedisKeyDimensions
+import com.redguard.infrastructure.redis.RateLimitScriptInitializer
 import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -11,7 +12,7 @@ import org.springframework.data.redis.core.StringRedisTemplate
 class RateLimitLuaExecutorPayloadTest {
     private val redisTemplate = StringRedisTemplate()
     private val keyBuilder = RedisKeyBuilder()
-    private val executor = RateLimitLuaExecutor(redisTemplate, keyBuilder)
+    private val executor = RateLimitLuaExecutor(redisTemplate, keyBuilder, NoOpRateLimitScriptInitializer())
     private val fixedInstant = Instant.parse("2025-11-23T10:15:30Z")
     private val dimensions = RedisKeyDimensions(
         scope = RateLimitScope.TENANT_API,
@@ -75,5 +76,10 @@ class RateLimitLuaExecutorPayloadTest {
         assertEquals("-1", payload.args[3]) // 일 쿼터
         assertEquals("20000", payload.args[4]) // 월 쿼터 활성
         assertEquals("2", payload.args[13]) // 증가량
+    }
+
+    private class NoOpRateLimitScriptInitializer : RateLimitScriptInitializer {
+        override fun ensureLoaded() {}
+        override fun reload() {}
     }
 }
