@@ -34,6 +34,7 @@ class RedisConfig(
     private val redisProperties: RedisProperties,
     private val objectMapper: ObjectMapper
 ) {
+
     /**
      * Lettuce 공용 리소스 빈
      * 이벤트 루프/스레드풀을 공유해 커넥션 팩토리 간 불필요한 리소스 중복 방지
