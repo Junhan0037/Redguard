@@ -2,7 +2,7 @@ package com.redguard.application.ratelimit
 
 import com.redguard.domain.ratelimit.RateLimitScope
 import java.time.Instant
-import org.springframework.http.HttpMethod
+import com.redguard.domain.policy.ApiHttpMethod
 
 /**
  * Rate Limit 평가에 사용되는 정책 스냅샷
@@ -24,7 +24,7 @@ data class RateLimitCheckCommand(
     val tenantId: String,
     val userId: String? = null,
     val apiPath: String? = null,
-    val httpMethod: HttpMethod,
+    val httpMethod: ApiHttpMethod,
     val timestamp: Instant,
     val increment: Long = 1,
     val policy: RateLimitPolicySnapshot

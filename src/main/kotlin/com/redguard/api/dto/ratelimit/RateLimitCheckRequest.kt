@@ -1,5 +1,6 @@
 package com.redguard.api.dto.ratelimit
 
+import com.redguard.domain.policy.ApiHttpMethod
 import com.redguard.domain.ratelimit.RateLimitScope
 import jakarta.validation.Constraint
 import jakarta.validation.ConstraintValidator
@@ -13,7 +14,6 @@ import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.Size
 import java.time.Instant
 import kotlin.reflect.KClass
-import org.springframework.http.HttpMethod
 
 /**
  * `/internal/rate-limit/check` 요청 DTO
@@ -38,7 +38,7 @@ data class RateLimitCheckRequest(
     val apiPath: String? = null,
 
     @field:NotNull(message = "httpMethod는 필수입니다.")
-    val httpMethod: HttpMethod,
+    val httpMethod: ApiHttpMethod,
 
     @field:NotNull(message = "timestamp는 필수입니다.")
     @field:PastOrPresent(message = "timestamp는 현재 시각 이후일 수 없습니다.")

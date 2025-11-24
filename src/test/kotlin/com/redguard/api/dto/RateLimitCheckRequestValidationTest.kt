@@ -1,6 +1,7 @@
 package com.redguard.api.dto
 
 import com.redguard.api.dto.ratelimit.RateLimitCheckRequest
+import com.redguard.domain.policy.ApiHttpMethod
 import com.redguard.domain.ratelimit.RateLimitScope
 import jakarta.validation.Validation
 import jakarta.validation.Validator
@@ -8,7 +9,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
-import org.springframework.http.HttpMethod
 import java.time.Instant
 
 class RateLimitCheckRequestValidationTest {
@@ -20,7 +20,7 @@ class RateLimitCheckRequestValidationTest {
             tenantId = "tenant-1",
             userId = null,
             apiPath = null,
-            httpMethod = HttpMethod.GET,
+            httpMethod = ApiHttpMethod.GET,
             timestamp = Instant.now()
         )
 
@@ -36,7 +36,7 @@ class RateLimitCheckRequestValidationTest {
             tenantId = "tenant-1",
             userId = null,
             apiPath = "/v1/resource",
-            httpMethod = HttpMethod.POST,
+            httpMethod = ApiHttpMethod.POST,
             timestamp = Instant.now()
         )
 
@@ -52,7 +52,7 @@ class RateLimitCheckRequestValidationTest {
             tenantId = "tenant-1",
             userId = null,
             apiPath = "/v1/resource",
-            httpMethod = HttpMethod.POST,
+            httpMethod = ApiHttpMethod.POST,
             timestamp = Instant.now().plusSeconds(60)
         )
 
@@ -68,7 +68,7 @@ class RateLimitCheckRequestValidationTest {
             tenantId = "tenant-1",
             userId = "user-1",
             apiPath = "/v1/report",
-            httpMethod = HttpMethod.POST,
+            httpMethod = ApiHttpMethod.POST,
             timestamp = Instant.now()
         )
 

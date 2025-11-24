@@ -1,5 +1,6 @@
 package com.redguard.application.ratelimit
 
+import com.redguard.domain.policy.ApiHttpMethod
 import com.redguard.domain.ratelimit.RateLimitScope
 import com.redguard.infrastructure.redis.QuotaResult
 import com.redguard.infrastructure.redis.RateLimitScriptRequest
@@ -9,7 +10,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.springframework.http.HttpMethod
 import java.time.Instant
 
 class RateLimitCheckServiceTest {
@@ -32,7 +32,7 @@ class RateLimitCheckServiceTest {
             tenantId = "tenant-1",
             userId = "user-1",
             apiPath = "/v1/report",
-            httpMethod = HttpMethod.POST,
+            httpMethod = ApiHttpMethod.POST,
             timestamp = Instant.parse("2025-01-01T00:00:00Z"),
             increment = 1,
             policy = RateLimitPolicySnapshot(
@@ -70,7 +70,7 @@ class RateLimitCheckServiceTest {
             tenantId = "tenant-1",
             userId = null,
             apiPath = null,
-            httpMethod = HttpMethod.GET,
+            httpMethod = ApiHttpMethod.GET,
             timestamp = Instant.now(),
             increment = 1,
             policy = RateLimitPolicySnapshot(
@@ -104,7 +104,7 @@ class RateLimitCheckServiceTest {
             tenantId = "tenant-1",
             userId = null,
             apiPath = "/v1/report",
-            httpMethod = HttpMethod.GET,
+            httpMethod = ApiHttpMethod.GET,
             timestamp = Instant.now(),
             policy = RateLimitPolicySnapshot(limitPerSecond = 10)
         )
