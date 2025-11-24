@@ -2,17 +2,14 @@ package com.redguard.infrastructure.redis
 
 import com.redguard.domain.ratelimit.RateLimitScope
 import com.redguard.domain.ratelimit.RedisKeyDimensions
-import com.redguard.infrastructure.redis.RateLimitScriptInitializer
-import java.time.Instant
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.springframework.data.redis.core.StringRedisTemplate
+import java.time.Instant
 
-class RateLimitLuaExecutorPayloadTest {
-    private val redisTemplate = StringRedisTemplate()
+class RateLimitPayloadBuilderTest {
     private val keyBuilder = RedisKeyBuilder()
-    private val executor = RateLimitLuaExecutor(redisTemplate, keyBuilder, NoOpRateLimitScriptInitializer())
+    private val payloadBuilder = RateLimitPayloadBuilder(keyBuilder)
     private val fixedInstant = Instant.parse("2025-11-23T10:15:30Z")
     private val dimensions = RedisKeyDimensions(
         scope = RateLimitScope.TENANT_API,
@@ -22,7 +19,7 @@ class RateLimitLuaExecutorPayloadTest {
 
     @Test
     fun `빌드된_페이로드는_키와_인자를_모두_채운다`() {
-        val payload = executor.buildPayload(
+        val payload = payloadBuilder.build(
             RateLimitScriptRequest(
                 dimensions = dimensions,
                 timestamp = fixedInstant,
@@ -56,7 +53,7 @@ class RateLimitLuaExecutorPayloadTest {
 
     @Test
     fun `리밋이_null이면_비활성화로_전달된다`() {
-        val payload = executor.buildPayload(
+        val payload = payloadBuilder.build(
             RateLimitScriptRequest(
                 dimensions = dimensions,
                 timestamp = fixedInstant,
@@ -76,10 +73,5 @@ class RateLimitLuaExecutorPayloadTest {
         assertEquals("-1", payload.args[3]) // 일 쿼터
         assertEquals("20000", payload.args[4]) // 월 쿼터 활성
         assertEquals("2", payload.args[13]) // 증가량
-    }
-
-    private class NoOpRateLimitScriptInitializer : RateLimitScriptInitializer {
-        override fun ensureLoaded() {}
-        override fun reload() {}
     }
 }
