@@ -44,7 +44,8 @@ data class RateLimitScriptResult(
     val minute: WindowResult?,
     val day: WindowResult?,
     val dailyQuota: QuotaResult?,
-    val monthlyQuota: QuotaResult?
+    val monthlyQuota: QuotaResult?,
+    val fallbackApplied: Boolean = false
 )
 
 /**

@@ -45,7 +45,8 @@ class RateLimitFallbackHandler(
             minute = fallbackFixedWindowResult(allowed = true, limit = request.limitPerMinute),
             day = fallbackFixedWindowResult(allowed = true, limit = request.limitPerDay),
             dailyQuota = fallbackFixedQuotaResult(allowed = true, limit = request.quotaPerDay),
-            monthlyQuota = fallbackFixedQuotaResult(allowed = true, limit = request.quotaPerMonth)
+            monthlyQuota = fallbackFixedQuotaResult(allowed = true, limit = request.quotaPerMonth),
+            fallbackApplied = true
         )
     }
 
@@ -58,7 +59,8 @@ class RateLimitFallbackHandler(
             minute = fallbackFixedWindowResult(allowed = false, limit = request.limitPerMinute),
             day = fallbackFixedWindowResult(allowed = false, limit = request.limitPerDay),
             dailyQuota = fallbackFixedQuotaResult(allowed = false, limit = request.quotaPerDay),
-            monthlyQuota = fallbackFixedQuotaResult(allowed = false, limit = request.quotaPerMonth)
+            monthlyQuota = fallbackFixedQuotaResult(allowed = false, limit = request.quotaPerMonth),
+            fallbackApplied = true
         )
     }
 
@@ -98,7 +100,8 @@ class RateLimitFallbackHandler(
                 limit = preferredLimit(rateLimitProperties.staticQuotaPerMonth, request.quotaPerMonth),
                 request = request,
                 timestamp = timestamp
-            )
+            ),
+            fallbackApplied = true
         )
     }
 

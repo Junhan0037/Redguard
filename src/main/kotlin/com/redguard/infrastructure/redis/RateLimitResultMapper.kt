@@ -23,7 +23,8 @@ class RateLimitResultMapper {
             minute = minute(raw),
             day = day(raw),
             dailyQuota = quotaDay(raw),
-            monthlyQuota = quotaMonth(raw)
+            monthlyQuota = quotaMonth(raw),
+            fallbackApplied = false
         )
     }
 
