@@ -46,7 +46,7 @@ class RateLimitCheckController(
     /**
      * 외부 요청 DTO를 애플리케이션 유스케이스 입력 모델로 변환
      */
-    private fun RateLimitCheckRequest.toInput(): RateLimitCheckInput = RateLimitCheckInput(
+    private fun RateLimitCheckRequest.toInput() = RateLimitCheckInput(
         scope = scope,
         tenantId = tenantId,
         userId = userId,
@@ -59,7 +59,7 @@ class RateLimitCheckController(
     /**
      * 유스케이스 결과를 API 응답 DTO로 매핑
      */
-    private fun RateLimitCheckResult.toResponse(): RateLimitCheckResponse = RateLimitCheckResponse(
+    private fun RateLimitCheckResult.toResponse() = RateLimitCheckResponse(
         allowed = allowed,
         decision = decision.toReason(),
         fallbackApplied = fallbackApplied,
@@ -88,7 +88,7 @@ class RateLimitCheckController(
     /**
      * 윈도우 사용량 도메인 모델을 응답 DTO로 변환
      */
-    private fun WindowUsage.toResponse(): WindowEvaluation = WindowEvaluation(
+    private fun WindowUsage.toResponse() = WindowEvaluation(
         allowed = allowed,
         limit = limit,
         effectiveCount = effectiveCount,
@@ -99,7 +99,7 @@ class RateLimitCheckController(
     /**
      * 쿼터 사용량 도메인 모델을 응답 DTO로 변환
      */
-    private fun QuotaUsage.toResponse(): QuotaEvaluation = QuotaEvaluation(
+    private fun QuotaUsage.toResponse() = QuotaEvaluation(
         allowed = allowed,
         limit = limit,
         totalCount = totalCount
