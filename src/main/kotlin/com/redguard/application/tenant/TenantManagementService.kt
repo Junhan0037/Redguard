@@ -1,5 +1,6 @@
 package com.redguard.application.tenant
 
+import com.redguard.application.plan.PlanInfo
 import com.redguard.common.exception.ErrorCode
 import com.redguard.common.exception.RedGuardException
 import com.redguard.domain.plan.Plan
@@ -140,7 +141,9 @@ class TenantManagementService(
         }
     }
 
-    // JPA 저장 시 무결성 예외를 도메인 예외로 치환해 호출 측에서 일관되게 처리하도록 함
+    /**
+     * JPA 저장 시 무결성 예외를 도메인 예외로 치환해 호출 측에서 일관되게 처리하도록 함
+     */
     private fun <T> saveSafely(action: () -> T): T =
         try {
             action()

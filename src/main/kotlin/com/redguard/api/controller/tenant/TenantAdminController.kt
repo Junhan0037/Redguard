@@ -6,9 +6,9 @@ import com.redguard.api.dto.tenant.TenantCreateRequest
 import com.redguard.api.dto.tenant.TenantPlanChangeRequest
 import com.redguard.api.dto.tenant.TenantResponse
 import com.redguard.api.dto.tenant.TenantUpdateRequest
+import com.redguard.application.plan.PlanInfo
 import com.redguard.application.tenant.ChangeTenantPlanCommand
 import com.redguard.application.tenant.CreateTenantCommand
-import com.redguard.application.tenant.PlanInfo
 import com.redguard.application.tenant.TenantInfo
 import com.redguard.application.tenant.TenantManagementUseCase
 import com.redguard.application.tenant.UpdateTenantCommand

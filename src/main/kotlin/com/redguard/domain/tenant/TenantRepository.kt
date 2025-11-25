@@ -13,4 +13,6 @@ interface TenantRepository : JpaRepository<Tenant, Long> {
 
     @EntityGraph(attributePaths = ["plan"])
     fun findAllBy(): List<Tenant>
+
+    fun countByPlanId(planId: Long): Long
 }
