@@ -27,3 +27,13 @@ management:
 redguard:
   rate-limit:
     fallback-policy: ALLOW_ALL
+  admin-auth:
+    issuer: redguard-admin
+    access-token-secret: ${REDGUARD_ADMIN_ACCESS_SECRET:dev-access-secret-please-change-32bytes-minimum-value}
+    refresh-token-secret: ${REDGUARD_ADMIN_REFRESH_SECRET:dev-refresh-secret-please-change-32bytes-minimum-value}
+    access-token-ttl: 15m
+    refresh-token-ttl: 24h
+    allowed-clock-skew-seconds: 30
+    max-failed-attempts: 5
+    lockout-duration-minutes: 15
+    token-namespace: admin:auth

@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:redguard;MODE=PostgreSQL;DATABASE_TO_UPPER=false;DB_CLOSE_DELAY=-1
+    url: jdbc:h2:mem:redguard;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
     driver-class-name: org.h2.Driver
     username: sa
     password:
@@ -9,16 +9,22 @@ spring:
       ddl-auto: create-drop
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        default_schema: PUBLIC
     open-in-view: false
-  data:
-    redis:
-      host: localhost
-      port: 6379
-  flyway:
-    enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+      - org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
 
-logging:
-  level:
-    root: WARN
-    com.redguard: INFO
+redguard:
+  admin-auth:
+    issuer: redguard-admin
+    access-token-secret: test-access-secret-please-change-32bytes
+    refresh-token-secret: test-refresh-secret-please-change-32bytes
+    access-token-ttl: 15m
+    refresh-token-ttl: 24h
+    allowed-clock-skew-seconds: 30
+    max-failed-attempts: 5
+    lockout-duration-minutes: 15
+    token-namespace: admin:test

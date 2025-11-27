@@ -1,5 +1,7 @@
 package com.redguard.domain.policy
 
+import com.redguard.common.exception.ErrorCode
+import com.redguard.common.exception.RedGuardException
 import com.redguard.domain.common.AuditableEntity
 import com.redguard.domain.plan.Plan
 import com.redguard.domain.tenant.Tenant
@@ -55,7 +57,7 @@ class ApiPolicy(
     @PreUpdate
     fun validateTarget() {
         if (tenant == null && plan == null) {
-            throw IllegalStateException("ApiPolicy must target at least a tenant or a plan")
+            throw RedGuardException(ErrorCode.INVALID_REQUEST, "ApiPolicy는 테넌트 또는 요금제를 최소 하나 지정해야 합니다.")
         }
     }
 }

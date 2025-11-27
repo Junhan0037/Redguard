@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
+import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.junit.jupiter.SpringExtension
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.post
@@ -25,6 +26,7 @@ import java.time.Instant
 @WebMvcTest(RateLimitCheckController::class)
 @Import(RateLimitCheckControllerTest.TestConfig::class)
 @ExtendWith(SpringExtension::class)
+@ActiveProfiles("test")
 class RateLimitCheckControllerTest(
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
