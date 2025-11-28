@@ -33,3 +33,10 @@ redguard:
     max-failed-attempts: 5
     lockout-duration-minutes: 15
     token-namespace: admin:auth
+  usage-snapshot:
+    enabled: true
+    cron: "0 */5 * * * *"
+    lock-key: job:usage-snapshot:lock
+    lock-ttl-seconds: 300
+    scan-count: 1000
+    fetch-batch-size: 200

@@ -15,4 +15,6 @@ interface TenantRepository : JpaRepository<Tenant, Long> {
     fun findAllBy(): List<Tenant>
 
     fun countByPlanId(planId: Long): Long
+
+    fun findAllByNameIn(names: Collection<String>): List<Tenant>
 }
