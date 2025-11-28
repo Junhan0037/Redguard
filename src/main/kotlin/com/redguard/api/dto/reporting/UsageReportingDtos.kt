@@ -26,6 +26,18 @@ data class UsageSnapshotResponse(
     val createdAt: Instant
 )
 
+data class UsageSummaryResponse(
+    val daily: UsageAggregateResponse,
+    val monthly: UsageAggregateResponse,
+    val recentDays: List<UsageAggregateResponse>
+)
+
+data class UsageAggregateResponse(
+    val date: LocalDate,
+    val periodType: UsageSnapshotPeriod,
+    val totalCount: Long
+)
+
 data class PagedResponse<T>(
     val items: List<T>,
     val page: Int,

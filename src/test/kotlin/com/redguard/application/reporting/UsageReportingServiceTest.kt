@@ -151,6 +151,66 @@ class UsageReportingServiceTest(
         }
     }
 
+    @Test
+    fun `일월_요약과_최근_일수_집계가_정상적으로_반환된다`() {
+        val tenant = prepareTenant()
+        val baseDate = LocalDate.of(2025, 1, 15)
+
+        usageSnapshotRepository.saveAll(
+            listOf(
+                UsageSnapshot(
+                    tenant = tenant,
+                    userId = null,
+                    apiPath = null,
+                    snapshotDate = baseDate.minusDays(2),
+                    periodType = UsageSnapshotPeriod.DAY,
+                    totalCount = 10
+                ),
+                UsageSnapshot(
+                    tenant = tenant,
+                    userId = null,
+                    apiPath = null,
+                    snapshotDate = baseDate.minusDays(1),
+                    periodType = UsageSnapshotPeriod.DAY,
+                    totalCount = 20
+                ),
+                UsageSnapshot(
+                    tenant = tenant,
+                    userId = null,
+                    apiPath = null,
+                    snapshotDate = baseDate,
+                    periodType = UsageSnapshotPeriod.DAY,
+                    totalCount = 30
+                ),
+                UsageSnapshot(
+                    tenant = tenant,
+                    userId = null,
+                    apiPath = null,
+                    snapshotDate = baseDate.withDayOfMonth(1),
+                    periodType = UsageSnapshotPeriod.MONTH,
+                    totalCount = 500
+                )
+            )
+        )
+
+        val summary = usageReportingUseCase.summarizeUsage(
+            UsageSummaryCommand(
+                tenantId = tenant.id!!,
+                targetDate = baseDate,
+                recentDays = 3,
+                userId = null,
+                apiPath = null
+            )
+        )
+
+        assertThat(summary.daily.totalCount).isEqualTo(30)
+        assertThat(summary.monthly.totalCount).isEqualTo(500)
+        assertThat(summary.recentDays).hasSize(3)
+        assertThat(summary.recentDays.first().date).isEqualTo(baseDate.minusDays(2))
+        assertThat(summary.recentDays.first().totalCount).isEqualTo(10)
+        assertThat(summary.recentDays.last().totalCount).isEqualTo(30)
+    }
+
     private fun prepareTenant(): Tenant {
         val plan = planRepository.save(
             Plan(

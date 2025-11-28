@@ -20,6 +20,7 @@ import java.time.LocalDate
 interface UsageReportingUseCase {
     fun searchLimitHitLogs(command: LimitHitLogSearchCommand): PagedResult<LimitHitLogInfo>
     fun searchUsageSnapshots(command: UsageSnapshotSearchCommand): PagedResult<UsageSnapshotInfo>
+    fun summarizeUsage(command: UsageSummaryCommand): UsageSummaryResult
 }
 
 @Service
@@ -80,6 +81,62 @@ class UsageReportingService(
     }
 
     /**
+     * 지정 일자의 일/월 합계와 최근 N일 일별 합계를 반환
+     */
+    @Transactional(readOnly = true)
+    override fun summarizeUsage(command: UsageSummaryCommand): UsageSummaryResult {
+        validateRecentDays(command.recentDays)
+        ensureTenantExists(command.tenantId)
+
+        val recentStart = command.targetDate.minusDays(command.recentDays.toLong() - 1)
+        val dailySnapshots = usageSnapshotRepository.findAllByFilters(
+            tenantId = command.tenantId,
+            periodType = UsageSnapshotPeriod.DAY,
+            userId = command.userId,
+            apiPath = command.apiPath,
+            startDate = recentStart,
+            endDate = command.targetDate
+        )
+
+        val dailySumByDate = dailySnapshots.groupBy { it.snapshotDate }
+            .mapValues { entry -> entry.value.sumOf { it.totalCount } }
+
+        val dailyUsage = dailySumByDate[command.targetDate] ?: 0
+        val recentUsages = (0 until command.recentDays).map { index ->
+            val date = recentStart.plusDays(index.toLong())
+            DailyUsage(date = date, totalCount = dailySumByDate[date] ?: 0)
+        }
+
+        val monthStart = command.targetDate.withDayOfMonth(1)
+        val monthEnd = command.targetDate.withDayOfMonth(command.targetDate.lengthOfMonth())
+        val monthlySnapshots = usageSnapshotRepository.findAllByFilters(
+            tenantId = command.tenantId,
+            periodType = UsageSnapshotPeriod.MONTH,
+            userId = command.userId,
+            apiPath = command.apiPath,
+            startDate = monthStart,
+            endDate = monthEnd
+        )
+        val monthlyTotalFromSnapshot = monthlySnapshots.sumOf { it.totalCount }
+        val monthlyTotalFromDays = usageSnapshotRepository.findAllByFilters(
+            tenantId = command.tenantId,
+            periodType = UsageSnapshotPeriod.DAY,
+            userId = command.userId,
+            apiPath = command.apiPath,
+            startDate = monthStart,
+            endDate = monthEnd
+        ).sumOf { it.totalCount }
+
+        val monthlyUsage = if (monthlyTotalFromSnapshot > 0) monthlyTotalFromSnapshot else monthlyTotalFromDays
+
+        return UsageSummaryResult(
+            daily = UsageAggregate(date = command.targetDate, periodType = UsageSnapshotPeriod.DAY, totalCount = dailyUsage),
+            monthly = UsageAggregate(date = monthStart, periodType = UsageSnapshotPeriod.MONTH, totalCount = monthlyUsage),
+            recentDays = recentUsages
+        )
+    }
+
+    /**
      * 존재하지 않는 테넌트 요청을 사전에 차단
      */
     private fun ensureTenantExists(tenantId: Long) {
@@ -103,6 +160,12 @@ class UsageReportingService(
     private fun validateDateRange(startDate: LocalDate, endDate: LocalDate) {
         if (startDate.isAfter(endDate)) {
             throw RedGuardException(ErrorCode.INVALID_REQUEST, "조회 시작 일자가 종료 일자보다 이후입니다.")
+        }
+    }
+
+    private fun validateRecentDays(recentDays: Int) {
+        if (recentDays <= 0 || recentDays > 180) {
+            throw RedGuardException(ErrorCode.INVALID_REQUEST, "최근 조회 일수는 1~180 사이여야 합니다.")
         }
     }
 
@@ -159,6 +222,14 @@ data class UsageSnapshotSearchCommand(
     val size: Int
 )
 
+data class UsageSummaryCommand(
+    val tenantId: Long,
+    val targetDate: LocalDate,
+    val recentDays: Int,
+    val userId: String?,
+    val apiPath: String?
+)
+
 data class LimitHitLogInfo(
     val id: Long,
     val tenantId: Long,
@@ -178,6 +249,23 @@ data class UsageSnapshotInfo(
     val periodType: UsageSnapshotPeriod,
     val totalCount: Long,
     val createdAt: Instant
+)
+
+data class UsageSummaryResult(
+    val daily: UsageAggregate,
+    val monthly: UsageAggregate,
+    val recentDays: List<DailyUsage>
+)
+
+data class UsageAggregate(
+    val date: LocalDate,
+    val periodType: UsageSnapshotPeriod,
+    val totalCount: Long
+)
+
+data class DailyUsage(
+    val date: LocalDate,
+    val totalCount: Long
 )
 
 data class PagedResult<T>(

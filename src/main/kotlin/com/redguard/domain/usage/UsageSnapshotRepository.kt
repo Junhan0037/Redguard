@@ -35,4 +35,25 @@ interface UsageSnapshotRepository : JpaRepository<UsageSnapshot, Long> {
         @Param("endDate") endDate: LocalDate,
         pageable: Pageable
     ): Page<UsageSnapshot>
+
+    @Query(
+        """
+        select u
+        from UsageSnapshot u
+        where u.tenant.id = :tenantId
+          and u.snapshotDate >= :startDate
+          and u.snapshotDate <= :endDate
+          and u.periodType = :periodType
+          and (:userId is null or u.userId = :userId)
+          and (:apiPath is null or u.apiPath = :apiPath)
+    """
+    )
+    fun findAllByFilters(
+        @Param("tenantId") tenantId: Long,
+        @Param("periodType") periodType: UsageSnapshotPeriod,
+        @Param("userId") userId: String?,
+        @Param("apiPath") apiPath: String?,
+        @Param("startDate") startDate: LocalDate,
+        @Param("endDate") endDate: LocalDate
+    ): List<UsageSnapshot>
 }

@@ -3,13 +3,17 @@ package com.redguard.api.controller.reporting
 import com.redguard.api.dto.ApiResponse
 import com.redguard.api.dto.reporting.LimitHitLogResponse
 import com.redguard.api.dto.reporting.PagedResponse
+import com.redguard.api.dto.reporting.UsageAggregateResponse
 import com.redguard.api.dto.reporting.UsageSnapshotResponse
+import com.redguard.api.dto.reporting.UsageSummaryResponse
 import com.redguard.application.reporting.LimitHitLogInfo
 import com.redguard.application.reporting.LimitHitLogSearchCommand
 import com.redguard.application.reporting.PagedResult
+import com.redguard.application.reporting.UsageAggregate
 import com.redguard.application.reporting.UsageReportingUseCase
 import com.redguard.application.reporting.UsageSnapshotInfo
 import com.redguard.application.reporting.UsageSnapshotSearchCommand
+import com.redguard.application.reporting.UsageSummaryCommand
 import com.redguard.domain.limit.LimitHitReason
 import com.redguard.domain.usage.UsageSnapshotPeriod
 import jakarta.validation.constraints.Max
@@ -23,12 +27,14 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.Instant
 import java.time.LocalDate
+import java.time.Clock
 
 @RestController
 @RequestMapping("/admin/usage")
 @Validated
 class UsageReportingAdminController(
-    private val usageReportingUseCase: UsageReportingUseCase
+    private val usageReportingUseCase: UsageReportingUseCase,
+    private val clock: Clock
 ) {
 
     @GetMapping("/limit-hit-logs")
@@ -109,6 +115,40 @@ class UsageReportingAdminController(
         return ApiResponse(data = result.toResponse { it.toResponse() })
     }
 
+    @GetMapping("/summary")
+    fun summarizeUsage(
+        @RequestParam tenantId: Long,
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+        targetDate: LocalDate?,
+        @RequestParam(defaultValue = "30")
+        @Min(value = 1, message = "recentDays는 1 이상이어야 합니다.")
+        @Max(value = 180, message = "recentDays는 최대 180일까지 조회할 수 있습니다.")
+        recentDays: Int,
+        @RequestParam(required = false)
+        @Size(max = 64, message = "userId는 64자 이하로 입력해주세요.")
+        userId: String?,
+        @RequestParam(required = false)
+        @Size(max = 255, message = "apiPath는 255자 이하로 입력해주세요.")
+        apiPath: String?
+    ): ApiResponse<UsageSummaryResponse> {
+        val command = UsageSummaryCommand(
+            tenantId = tenantId,
+            targetDate = targetDate ?: LocalDate.now(clock),
+            recentDays = recentDays,
+            userId = sanitize(userId),
+            apiPath = sanitize(apiPath)
+        )
+        val result = usageReportingUseCase.summarizeUsage(command)
+        return ApiResponse(
+            data = UsageSummaryResponse(
+                daily = result.daily.toResponse(),
+                monthly = result.monthly.toResponse(),
+                recentDays = result.recentDays.map { UsageAggregateResponse(date = it.date, periodType = UsageSnapshotPeriod.DAY, totalCount = it.totalCount) }
+            )
+        )
+    }
+
     private fun sanitize(value: String?): String? = value?.trim()?.takeIf { it.isNotEmpty() }
 
     private fun LimitHitLogInfo.toResponse() = LimitHitLogResponse(
@@ -130,6 +170,12 @@ class UsageReportingAdminController(
         periodType = periodType,
         totalCount = totalCount,
         createdAt = createdAt
+    )
+
+    private fun UsageAggregate.toResponse() = UsageAggregateResponse(
+        date = date,
+        periodType = periodType,
+        totalCount = totalCount
     )
 
     private fun <T, R> PagedResult<T>.toResponse(mapper: (T) -> R) = PagedResponse(
