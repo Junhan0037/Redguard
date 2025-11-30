@@ -12,8 +12,6 @@ import java.time.LocalDate
 interface UsageSnapshotRepository : JpaRepository<UsageSnapshot, Long> {
     fun findTop30ByTenantIdAndPeriodTypeOrderBySnapshotDateDesc(tenantId: Long, periodType: UsageSnapshotPeriod): List<UsageSnapshot>
 
-    fun findByTenantIdAndSnapshotDateBetween(tenantId: Long, startDate: LocalDate, endDate: LocalDate): List<UsageSnapshot>
-
     @Query(
         """
         select u

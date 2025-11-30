@@ -7,6 +7,7 @@ import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
 import jakarta.persistence.FetchType
+import jakarta.persistence.Index
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
@@ -20,6 +21,20 @@ import java.time.LocalDate
         UniqueConstraint(
             name = "uk_usage_snapshot_scope",
             columnNames = ["tenant_id", "user_id", "api_path", "snapshot_date", "period_type"]
+        )
+    ],
+    indexes = [
+        Index(
+            name = "idx_usage_snapshot_tenant_period_date",
+            columnList = "tenant_id, period_type, snapshot_date DESC, id DESC"
+        ),
+        Index(
+            name = "idx_usage_snapshot_tenant_user_period_date",
+            columnList = "tenant_id, user_id, period_type, snapshot_date DESC, id DESC"
+        ),
+        Index(
+            name = "idx_usage_snapshot_tenant_api_period_date",
+            columnList = "tenant_id, api_path, period_type, snapshot_date DESC, id DESC"
         )
     ]
 )

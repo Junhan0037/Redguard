@@ -33,6 +33,7 @@ class UsageSnapshotIngestionService(
     /**
      * Redis 카운터를 읽어 DB 스냅샷으로 동기화
      * - 테넌트별로 기존 스냅샷을 조회해 변경분만 삽입/갱신
+     * - Redis 장애 시에도 DB 트랜잭션 단위로 일관성을 유지
      */
     @Transactional
     fun ingest(): UsageSnapshotIngestionResult {
@@ -63,19 +64,13 @@ class UsageSnapshotIngestionService(
                 return@forEach
             }
 
-            val startDate = counters.minOf { it.snapshotDate }
-            val endDate = counters.maxOf { it.snapshotDate }
-
-            // 조회 구간을 좁혀 동일 테넌트의 기존 스냅샷만 로딩해 upsert 비용 최소화
-            val existing = usageSnapshotRepository.findByTenantIdAndSnapshotDateBetween(tenant.id!!, startDate, endDate)
-            val existingMap = existing.associateBy {
-                SnapshotKey(it.userId, it.apiPath, it.snapshotDate, it.periodType)
-            }.toMutableMap()
+            val existingMap = loadExistingSnapshots(tenant.id!!, counters)
 
             counters.forEach { counter ->
                 val key = SnapshotKey(counter.userId, counter.apiPath, counter.snapshotDate, counter.periodType)
                 val current = existingMap[key]
                 if (current == null) {
+                    // 신규 스냅샷: 동일 스코프에 기존 데이터가 없을 때만 생성
                     val snapshot = UsageSnapshot(
                         tenant = tenant,
                         userId = counter.userId,
@@ -87,6 +82,7 @@ class UsageSnapshotIngestionService(
                     newSnapshots.add(snapshot)
                     existingMap[key] = snapshot
                 } else if (current.totalCount != counter.totalCount) {
+                    // 기존 스냅샷과 값이 다를 때만 업데이트해 불필요한 쓰기를 최소화
                     current.totalCount = counter.totalCount
                     updated++
                 }
@@ -108,6 +104,7 @@ class UsageSnapshotIngestionService(
 
     /**
      * Redis에서 쿼터 키를 스캔하고 값과 함께 파싱해 반환
+     * - SCAN으로 키 공간을 분할 조회, MGET을 청크 단위로 수행해 Redis 부하를 제어
      */
     private fun readQuotaCounters(): CounterReadResult {
         val scanOptions = ScanOptions.scanOptions()
@@ -210,6 +207,38 @@ class UsageSnapshotIngestionService(
     private fun parseDate(bucket: String): LocalDate = LocalDate.parse(bucket, DAILY_FORMATTER)
 
     private fun parseMonth(bucket: String): LocalDate = YearMonth.parse(bucket, MONTHLY_FORMATTER).atDay(1)
+
+    /**
+     * 테넌트별로 기간 단위 범위를 좁혀 기존 스냅샷을 로딩
+     * - periodType 단위로 조회해 인덱스 활용도를 높이고 불필요한 풀스캔을 방지
+     */
+    private fun loadExistingSnapshots(tenantId: Long, counters: List<QuotaCounter>): MutableMap<SnapshotKey, UsageSnapshot> {
+        if (counters.isEmpty()) {
+            return mutableMapOf()
+        }
+
+        val existingMap = mutableMapOf<SnapshotKey, UsageSnapshot>()
+        counters.groupBy { it.periodType }.forEach { (periodType, periodCounters) ->
+            val startDate = periodCounters.minOf { it.snapshotDate }
+            val endDate = periodCounters.maxOf { it.snapshotDate }
+
+            // 동일 periodType에 대해서만 범위를 좁혀 조회해 인덱스 효율과 조회 건수를 최적화
+            val existing = usageSnapshotRepository.findAllByFilters(
+                tenantId = tenantId,
+                periodType = periodType,
+                userId = null,
+                apiPath = null,
+                startDate = startDate,
+                endDate = endDate
+            )
+            existing.forEach { snapshot ->
+                val key = SnapshotKey(snapshot.userId, snapshot.apiPath, snapshot.snapshotDate, snapshot.periodType)
+                existingMap[key] = snapshot
+            }
+        }
+
+        return existingMap
+    }
 
     private data class QuotaCounter(
         val tenantName: String,

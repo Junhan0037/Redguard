@@ -17,7 +17,9 @@ import java.time.Instant
 @Table(
     name = "limit_hit_logs",
     indexes = [
-        Index(name = "idx_limit_hit_tenant_occurred_at", columnList = "tenant_id, occurred_at")
+        Index(name = "idx_limit_hit_tenant_occurred_at_desc", columnList = "tenant_id, occurred_at DESC, id DESC"),
+        Index(name = "idx_limit_hit_tenant_user_occurred_at", columnList = "tenant_id, user_id, occurred_at DESC, id DESC"),
+        Index(name = "idx_limit_hit_tenant_api_occurred_at", columnList = "tenant_id, api_path, occurred_at DESC, id DESC")
     ]
 )
 class LimitHitLog(
