@@ -6,9 +6,7 @@ import com.redguard.infrastructure.redis.QuotaResult
 import com.redguard.infrastructure.redis.RateLimitScriptRequest
 import com.redguard.infrastructure.redis.RateLimitScriptResult
 import com.redguard.infrastructure.redis.WindowResult
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.time.Instant
 
@@ -26,7 +24,7 @@ class RateLimitCheckServiceTest {
                 fallbackApplied = false
             )
         )
-        val service = RateLimitCheckService(engine)
+        val service = createService(engine)
         val command = RateLimitCheckCommand(
             scope = RateLimitScope.TENANT_API,
             tenantId = "tenant-1",
@@ -64,7 +62,7 @@ class RateLimitCheckServiceTest {
                 fallbackApplied = false
             )
         )
-        val service = RateLimitCheckService(engine)
+        val service = createService(engine)
         val command = RateLimitCheckCommand(
             scope = RateLimitScope.TENANT,
             tenantId = "tenant-1",
@@ -98,7 +96,7 @@ class RateLimitCheckServiceTest {
                 fallbackApplied = true
             )
         )
-        val service = RateLimitCheckService(engine)
+        val service = createService(engine)
         val command = RateLimitCheckCommand(
             scope = RateLimitScope.TENANT_API,
             tenantId = "tenant-1",
@@ -126,4 +124,19 @@ class RateLimitCheckServiceTest {
             return scriptResult
         }
     }
+
+    /**
+     * 메트릭 기록이 테스트 결과에 영향을 주지 않도록 무시하는 퍼블리셔
+     */
+    private class NoopRateLimitMetricsPublisher : RateLimitMetricsPublisher {
+        override fun record(command: RateLimitCheckCommand, result: RateLimitCheckResult) {
+            // 메트릭을 실제로 적재하지는 않음
+        }
+    }
+
+    /**
+     * 공통으로 사용할 RateLimitCheckService 생성 헬퍼
+     */
+    private fun createService(engine: RateLimitEngine): RateLimitCheckService =
+        RateLimitCheckService(engine, NoopRateLimitMetricsPublisher())
 }

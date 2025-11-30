@@ -15,7 +15,8 @@ import org.springframework.stereotype.Service
  */
 @Service
 class RateLimitCheckService(
-    private val rateLimitEngine: RateLimitEngine
+    private val rateLimitEngine: RateLimitEngine,
+    private val rateLimitMetricsPublisher: RateLimitMetricsPublisher
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -35,18 +36,22 @@ class RateLimitCheckService(
 
         val allowed = isAllowed(windowUsage, quotaUsage)
         val decision = deriveDecision(scriptResult, windowUsage, quotaUsage, allowed)
-
-        if (!allowed) {
-            logger.info { "Rate limit 차단: decision=$decision scope=${command.scope} tenant=${command.tenantId} api=${command.apiPath}" }
-        }
-
-        return RateLimitCheckResult(
+        val result = RateLimitCheckResult(
             decision = decision,
             allowed = allowed,
             windowUsages = windowUsage,
             quotaUsages = quotaUsage,
             fallbackApplied = scriptResult.fallbackApplied
         )
+
+        // 필수 관찰성 지표를 기록해 운영 시 요청/차단 추이를 추적
+        rateLimitMetricsPublisher.record(command, result)
+
+        if (!result.allowed) {
+            logger.info { "Rate limit 차단: decision=$decision scope=${command.scope} tenant=${command.tenantId} api=${command.apiPath}" }
+        }
+
+        return result
     }
 
     /**
