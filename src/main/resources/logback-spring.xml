@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="30 seconds">
+    <property name="CONSOLE_PATTERN" value="%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} [%thread] %-5level %logger{36} traceId=%X{traceId:-N/A} reqId=%X{requestId:-N/A} - %msg%n"/>
+
+    <!-- 개발 환경: 상세 디버깅을 위해 DEBUG 수준, 샘플링 없이 콘솔 출력 -->
+    <springProfile name="dev">
+        <appender name="DEV_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>${CONSOLE_PATTERN}</pattern>
+            </encoder>
+        </appender>
+
+        <root level="DEBUG">
+            <appender-ref ref="DEV_CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <!-- 스테이징/운영 환경: INFO 기반, BurstFilter로 노이즈를 제어하고 비동기 처리 -->
+    <springProfile name="staging,prod">
+        <turboFilter class="ch.qos.logback.classic.turbo.BurstFilter">
+            <Level>INFO</Level>
+            <!-- 60초 동안 200건까지 INFO 이하 로그를 즉시 허용, 초과분은 샘플링 -->
+            <MaxBurst>200</MaxBurst>
+            <BurstInterval>60000</BurstInterval>
+        </turboFilter>
+
+        <appender name="ASYNC_CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
+            <appender-ref ref="STRUCTURED_CONSOLE"/>
+            <queueSize>10240</queueSize>
+            <discardingThreshold>0</discardingThreshold>
+            <includeCallerData>false</includeCallerData>
+        </appender>
+
+        <appender name="STRUCTURED_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>${CONSOLE_PATTERN}</pattern>
+            </encoder>
+        </appender>
+
+        <logger name="org.springframework" level="INFO"/>
+        <logger name="com.redguard" level="INFO"/>
+
+        <root level="INFO">
+            <appender-ref ref="ASYNC_CONSOLE"/>
+        </root>
+    </springProfile>
+</configuration>

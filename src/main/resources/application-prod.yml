@@ -16,6 +16,18 @@ spring:
       ssl:
         enabled: true
       timeout: 2000
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
 
 server:
   shutdown: graceful

@@ -14,6 +14,18 @@ spring:
       port: ${REDGUARD_STAGING_REDIS_PORT:6379}
       ssl:
         enabled: false
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
 
 redguard:
   rate-limit:
