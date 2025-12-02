@@ -1,5 +1,9 @@
 package com.redguard.application.plan
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.redguard.application.admin.AdminAuditLogger
+import com.redguard.application.policy.PolicyAuditService
 import com.redguard.common.exception.ErrorCode
 import com.redguard.common.exception.RedGuardException
 import com.redguard.domain.policy.ApiHttpMethod
@@ -15,12 +19,20 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
+import org.springframework.boot.test.context.TestConfiguration
+import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
 
 @DataJpaTest
 @ActiveProfiles("test")
-@Import(PlanManagementService::class, JpaConfig::class)
+@Import(
+    PlanManagementService::class,
+    PolicyAuditService::class,
+    AdminAuditLogger::class,
+    JpaConfig::class,
+    PlanManagementServiceTest.TestConfig::class
+)
 class PlanManagementServiceTest(
     @Autowired private val planManagementService: PlanManagementService,
     @Autowired private val planRepository: PlanRepository,
@@ -114,6 +126,12 @@ class PlanManagementServiceTest(
         }
 
         assertThat(exception.errorCode).isEqualTo(ErrorCode.INVALID_REQUEST)
+    }
+
+    @TestConfiguration
+    class TestConfig {
+        @Bean
+        fun objectMapper(): ObjectMapper = jacksonObjectMapper()
     }
 
     private fun persistPlan(name: String): com.redguard.domain.plan.Plan {

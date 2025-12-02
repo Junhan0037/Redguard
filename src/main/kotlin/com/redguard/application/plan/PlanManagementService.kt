@@ -1,5 +1,9 @@
 package com.redguard.application.plan
 
+import com.redguard.application.admin.AdminAuditContext
+import com.redguard.application.policy.PolicyAuditService
+import com.redguard.application.policy.PolicyChangeType
+import com.redguard.application.policy.PolicyResourceType
 import com.redguard.common.exception.ErrorCode
 import com.redguard.common.exception.RedGuardException
 import com.redguard.domain.plan.Plan
@@ -12,11 +16,11 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 interface PlanManagementUseCase {
-    fun create(command: CreatePlanCommand): PlanInfo
+    fun create(command: CreatePlanCommand, auditContext: AdminAuditContext? = null): PlanInfo
     fun get(planId: Long): PlanInfo
     fun list(): List<PlanInfo>
-    fun update(planId: Long, command: UpdatePlanCommand): PlanInfo
-    fun delete(planId: Long)
+    fun update(planId: Long, command: UpdatePlanCommand, auditContext: AdminAuditContext? = null): PlanInfo
+    fun delete(planId: Long, auditContext: AdminAuditContext? = null)
 }
 
 /**
@@ -26,14 +30,16 @@ interface PlanManagementUseCase {
 class PlanManagementService(
     private val planRepository: PlanRepository,
     private val tenantRepository: TenantRepository,
-    private val apiPolicyRepository: ApiPolicyRepository
+    private val apiPolicyRepository: ApiPolicyRepository,
+    private val policyAuditService: PolicyAuditService
 ) : PlanManagementUseCase {
 
     private val logger = KotlinLogging.logger {}
 
     @Transactional
-    override fun create(command: CreatePlanCommand): PlanInfo {
+    override fun create(command: CreatePlanCommand, auditContext: AdminAuditContext?): PlanInfo {
         ensureNameAvailable(command.name)
+
         val savedPlan = saveSafely {
             planRepository.saveAndFlush(
                 Plan(
@@ -47,7 +53,17 @@ class PlanManagementService(
                 )
             )
         }
+
         logger.info { "요금제를 생성했습니다 planId=${savedPlan.id} name=${savedPlan.name}" }
+        policyAuditService.logPolicyChange(
+            resourceType = PolicyResourceType.PLAN,
+            resourceId = requireNotNull(savedPlan.id).toString(),
+            changeType = PolicyChangeType.CREATED,
+            before = null,
+            after = savedPlan.toAuditPayload(),
+            auditContext = auditContext
+        )
+
         return savedPlan.toInfo()
     }
 
@@ -62,11 +78,13 @@ class PlanManagementService(
             .map { it.toInfo() }
 
     @Transactional
-    override fun update(planId: Long, command: UpdatePlanCommand): PlanInfo {
+    override fun update(planId: Long, command: UpdatePlanCommand, auditContext: AdminAuditContext?): PlanInfo {
         val plan = findPlan(planId)
+        val beforeSnapshot = plan.toAuditPayload()
         if (plan.name != command.name) {
             ensureNameAvailable(command.name, planId)
         }
+
         plan.name = command.name
         plan.description = command.description
         plan.rateLimitPerSecond = command.rateLimitPerSecond
@@ -77,15 +95,36 @@ class PlanManagementService(
 
         val updatedPlan = saveSafely { planRepository.saveAndFlush(plan) }
         logger.info { "요금제를 수정했습니다 planId=${plan.id} name=${plan.name}" }
+
+        policyAuditService.logPolicyChange(
+            resourceType = PolicyResourceType.PLAN,
+            resourceId = requireNotNull(updatedPlan.id).toString(),
+            changeType = PolicyChangeType.UPDATED,
+            before = beforeSnapshot,
+            after = updatedPlan.toAuditPayload(),
+            auditContext = auditContext
+        )
         return updatedPlan.toInfo()
     }
 
     @Transactional
-    override fun delete(planId: Long) {
+    override fun delete(planId: Long, auditContext: AdminAuditContext?) {
         val plan = findPlan(planId)
+        val beforeSnapshot = plan.toAuditPayload()
+
         enforceNoReference(planId)
+
         planRepository.delete(plan)
         logger.info { "요금제를 삭제했습니다 planId=$planId" }
+
+        policyAuditService.logPolicyChange(
+            resourceType = PolicyResourceType.PLAN,
+            resourceId = planId.toString(),
+            changeType = PolicyChangeType.DELETED,
+            before = beforeSnapshot,
+            after = null,
+            auditContext = auditContext
+        )
     }
 
     private fun findPlan(planId: Long): Plan =
@@ -121,6 +160,20 @@ class PlanManagementService(
         quotaPerMonth = quotaPerMonth,
         createdAt = createdAt,
         updatedAt = updatedAt
+    )
+
+    /**
+     * 감사 로그 및 구조화 로그에서 활용할 요금제 스냅샷을 생성
+     */
+    private fun Plan.toAuditPayload() = mapOf(
+        "id" to id,
+        "name" to name,
+        "description" to description,
+        "rateLimitPerSecond" to rateLimitPerSecond,
+        "rateLimitPerMinute" to rateLimitPerMinute,
+        "rateLimitPerDay" to rateLimitPerDay,
+        "quotaPerDay" to quotaPerDay,
+        "quotaPerMonth" to quotaPerMonth
     )
 
     /**

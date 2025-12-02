@@ -1,5 +1,9 @@
 package com.redguard.application.tenant
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.redguard.application.admin.AdminAuditLogger
+import com.redguard.application.policy.PolicyAuditService
 import com.redguard.common.exception.ErrorCode
 import com.redguard.common.exception.RedGuardException
 import com.redguard.domain.plan.Plan
@@ -11,12 +15,20 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
+import org.springframework.boot.test.context.TestConfiguration
+import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
 
 @DataJpaTest
 @ActiveProfiles("test")
-@Import(TenantManagementService::class, JpaConfig::class)
+@Import(
+    TenantManagementService::class,
+    PolicyAuditService::class,
+    AdminAuditLogger::class,
+    JpaConfig::class,
+    TenantManagementServiceTest.TestConfig::class
+)
 class TenantManagementServiceTest(
     @Autowired private val tenantManagementService: TenantManagementService,
     @Autowired private val planRepository: PlanRepository
@@ -101,6 +113,12 @@ class TenantManagementServiceTest(
 
         val fetched = tenantManagementService.get(created.id)
         assertThat(fetched.status).isEqualTo(TenantStatus.INACTIVE)
+    }
+
+    @TestConfiguration
+    class TestConfig {
+        @Bean
+        fun objectMapper(): ObjectMapper = jacksonObjectMapper()
     }
 
     private fun createPlan(name: String): Plan =

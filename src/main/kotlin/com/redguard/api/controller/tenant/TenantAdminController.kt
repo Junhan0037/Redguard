@@ -6,14 +6,18 @@ import com.redguard.api.dto.tenant.TenantCreateRequest
 import com.redguard.api.dto.tenant.TenantPlanChangeRequest
 import com.redguard.api.dto.tenant.TenantResponse
 import com.redguard.api.dto.tenant.TenantUpdateRequest
+import com.redguard.application.admin.AdminAuditContext
 import com.redguard.application.plan.PlanInfo
 import com.redguard.application.tenant.ChangeTenantPlanCommand
 import com.redguard.application.tenant.CreateTenantCommand
 import com.redguard.application.tenant.TenantInfo
 import com.redguard.application.tenant.TenantManagementUseCase
 import com.redguard.application.tenant.UpdateTenantCommand
+import com.redguard.infrastructure.security.AdminPrincipal
+import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -33,9 +37,11 @@ class TenantAdminController(
 
     @PostMapping
     fun create(
-        @Valid @RequestBody request: TenantCreateRequest
+        @Valid @RequestBody request: TenantCreateRequest,
+        @AuthenticationPrincipal principal: AdminPrincipal?,
+        httpServletRequest: HttpServletRequest
     ): ResponseEntity<ApiResponse<TenantResponse>> {
-        val result = tenantManagementUseCase.create(request.toCommand())
+        val result = tenantManagementUseCase.create(request.toCommand(), buildAuditContext(principal, httpServletRequest))
         val location = URI.create("/admin/tenants/${result.id}")
         return ResponseEntity.created(location).body(ApiResponse(data = result.toResponse()))
     }
@@ -57,26 +63,36 @@ class TenantAdminController(
     @PutMapping("/{tenantId}")
     fun update(
         @PathVariable tenantId: Long,
-        @Valid @RequestBody request: TenantUpdateRequest
+        @Valid @RequestBody request: TenantUpdateRequest,
+        @AuthenticationPrincipal principal: AdminPrincipal?,
+        httpServletRequest: HttpServletRequest
     ): ApiResponse<TenantResponse> {
-        val result = tenantManagementUseCase.update(tenantId, request.toCommand())
+        val result = tenantManagementUseCase.update(tenantId, request.toCommand(), buildAuditContext(principal, httpServletRequest))
         return ApiResponse(data = result.toResponse())
     }
 
     @PatchMapping("/{tenantId}/plan")
     fun changePlan(
         @PathVariable tenantId: Long,
-        @Valid @RequestBody request: TenantPlanChangeRequest
+        @Valid @RequestBody request: TenantPlanChangeRequest,
+        @AuthenticationPrincipal principal: AdminPrincipal?,
+        httpServletRequest: HttpServletRequest
     ): ApiResponse<TenantResponse> {
-        val result = tenantManagementUseCase.changePlan(tenantId, ChangeTenantPlanCommand(planId = request.planId))
+        val result = tenantManagementUseCase.changePlan(
+            tenantId,
+            ChangeTenantPlanCommand(planId = request.planId),
+            buildAuditContext(principal, httpServletRequest)
+        )
         return ApiResponse(data = result.toResponse())
     }
 
     @DeleteMapping("/{tenantId}")
     fun delete(
-        @PathVariable tenantId: Long
+        @PathVariable tenantId: Long,
+        @AuthenticationPrincipal principal: AdminPrincipal?,
+        httpServletRequest: HttpServletRequest
     ): ApiResponse<String> {
-        tenantManagementUseCase.delete(tenantId)
+        tenantManagementUseCase.delete(tenantId, buildAuditContext(principal, httpServletRequest))
         return ApiResponse.empty()
     }
 
@@ -112,4 +128,17 @@ class TenantAdminController(
         createdAt = createdAt,
         updatedAt = updatedAt
     )
+
+    /**
+     * 감사 로그용 요청 컨텍스트를 구성
+     */
+    private fun buildAuditContext(principal: AdminPrincipal?, request: HttpServletRequest) = AdminAuditContext(
+        actorId = principal?.id,
+        ip = clientIp(request),
+        userAgent = request.getHeader("User-Agent")
+    )
+
+    private fun clientIp(request: HttpServletRequest): String? =
+        request.getHeader("X-Forwarded-For")?.split(",")?.firstOrNull()?.trim()
+            ?: request.remoteAddr
 }

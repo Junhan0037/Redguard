@@ -8,6 +8,7 @@ import com.redguard.infrastructure.redis.RateLimitScriptResult
 import com.redguard.infrastructure.redis.WindowResult
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.mock
 import java.time.Instant
 
 class RateLimitCheckServiceTest {
@@ -138,5 +139,5 @@ class RateLimitCheckServiceTest {
      * 공통으로 사용할 RateLimitCheckService 생성 헬퍼
      */
     private fun createService(engine: RateLimitEngine): RateLimitCheckService =
-        RateLimitCheckService(engine, NoopRateLimitMetricsPublisher())
+        RateLimitCheckService(engine, NoopRateLimitMetricsPublisher(), mock(LimitHitAuditService::class.java))
 }

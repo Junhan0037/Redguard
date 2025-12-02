@@ -2,12 +2,15 @@ package com.redguard.api.controller.plan
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.redguard.api.dto.plan.PlanCreateRequest
+import com.redguard.application.admin.AdminAuditContext
 import com.redguard.application.plan.CreatePlanCommand
 import com.redguard.application.plan.PlanInfo
 import com.redguard.application.plan.PlanManagementUseCase
 import com.redguard.application.plan.UpdatePlanCommand
 import com.redguard.common.exception.ErrorCode
 import com.redguard.common.exception.RedGuardException
+import com.redguard.domain.admin.AdminRole
+import com.redguard.infrastructure.security.AdminPrincipal
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -16,15 +19,20 @@ import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
+import org.springframework.web.method.support.HandlerMethodArgumentResolver
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver
 import java.time.Instant
 
 @WebMvcTest(PlanAdminController::class)
-@Import(PlanAdminControllerTest.TestConfig::class)
+@Import(PlanAdminControllerTest.TestConfig::class, PlanAdminControllerTest.SecurityResolverConfig::class)
 @ActiveProfiles("test")
 class PlanAdminControllerTest(
     @Autowired private val mockMvc: MockMvc,
@@ -54,6 +62,7 @@ class PlanAdminControllerTest(
                     quotaPerMonth = 100000
                 )
             )
+            with(adminAuthentication())
         }.andExpect {
             status { isCreated() }
             jsonPath("$.data.name") { value("PRO") }
@@ -76,6 +85,7 @@ class PlanAdminControllerTest(
         mockMvc.post("/admin/plans") {
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(request)
+            with(adminAuthentication())
         }.andExpect {
             status { isBadRequest() }
             jsonPath("$.code") { value("INVALID_REQUEST") }
@@ -98,6 +108,7 @@ class PlanAdminControllerTest(
     fun `삭제하면_OK를_반환한다`() {
         mockMvc.delete("/admin/plans/1") {
             accept = MediaType.APPLICATION_JSON
+            with(adminAuthentication())
         }.andExpect {
             status { isOk() }
             jsonPath("$.data") { value("OK") }
@@ -108,6 +119,13 @@ class PlanAdminControllerTest(
     class TestConfig {
         @Bean
         fun stubPlanManagementUseCase(): StubPlanManagementUseCase = StubPlanManagementUseCase()
+    }
+
+    @TestConfiguration
+    class SecurityResolverConfig : WebMvcConfigurer {
+        override fun addArgumentResolvers(resolvers: MutableList<HandlerMethodArgumentResolver>) {
+            resolvers.add(AuthenticationPrincipalArgumentResolver())
+        }
     }
 
     private fun samplePlanInfo(id: Long, name: String): PlanInfo = PlanInfo(
@@ -122,6 +140,11 @@ class PlanAdminControllerTest(
         createdAt = Instant.now(),
         updatedAt = Instant.now()
     )
+
+    private fun adminAuthentication() = run {
+        val principal = AdminPrincipal(1L, "admin", setOf(AdminRole.ADMIN))
+        authentication(UsernamePasswordAuthenticationToken(principal, null, principal.authorities))
+    }
 }
 
 class StubPlanManagementUseCase : PlanManagementUseCase {
@@ -129,7 +152,7 @@ class StubPlanManagementUseCase : PlanManagementUseCase {
     var nextList: List<PlanInfo> = emptyList()
     var nextException: RuntimeException? = null
 
-    override fun create(command: CreatePlanCommand): PlanInfo = respond()
+    override fun create(command: CreatePlanCommand, auditContext: AdminAuditContext?): PlanInfo = respond()
 
     override fun get(planId: Long): PlanInfo = respond()
 
@@ -138,9 +161,9 @@ class StubPlanManagementUseCase : PlanManagementUseCase {
         return nextList
     }
 
-    override fun update(planId: Long, command: UpdatePlanCommand): PlanInfo = respond()
+    override fun update(planId: Long, command: UpdatePlanCommand, auditContext: AdminAuditContext?): PlanInfo = respond()
 
-    override fun delete(planId: Long) {
+    override fun delete(planId: Long, auditContext: AdminAuditContext?) {
         nextException?.let { throw it }
     }
 

@@ -6,6 +6,7 @@ import com.redguard.domain.plan.Plan
 import com.redguard.domain.plan.PlanRepository
 import com.redguard.domain.policy.ApiHttpMethod
 import com.redguard.domain.policy.ApiPolicyRepository
+import com.redguard.domain.limit.LimitHitLogRepository
 import com.redguard.domain.ratelimit.RateLimitScope
 import com.redguard.domain.tenant.Tenant
 import com.redguard.domain.tenant.TenantRepository
@@ -40,11 +41,13 @@ class RateLimitCheckIntegrationTest @Autowired constructor(
     private val planRepository: PlanRepository,
     private val tenantRepository: TenantRepository,
     private val apiPolicyRepository: ApiPolicyRepository,
+    private val limitHitLogRepository: LimitHitLogRepository,
     private val stringRedisTemplate: StringRedisTemplate
 ) {
 
     @BeforeEach
     fun setUp() {
+        limitHitLogRepository.deleteAll()
         apiPolicyRepository.deleteAll()
         tenantRepository.deleteAll()
         planRepository.deleteAll()

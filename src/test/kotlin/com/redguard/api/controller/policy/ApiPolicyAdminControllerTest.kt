@@ -2,10 +2,17 @@ package com.redguard.api.controller.policy
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.redguard.api.dto.policy.ApiPolicyCreateRequest
-import com.redguard.application.policy.*
+import com.redguard.application.admin.AdminAuditContext
+import com.redguard.application.policy.ApiPolicyInfo
+import com.redguard.application.policy.ApiPolicyManagementUseCase
+import com.redguard.application.policy.ApiPolicySearchFilter
+import com.redguard.application.policy.CreateApiPolicyCommand
+import com.redguard.application.policy.UpdateApiPolicyCommand
 import com.redguard.common.exception.ErrorCode
 import com.redguard.common.exception.RedGuardException
+import com.redguard.domain.admin.AdminRole
 import com.redguard.domain.policy.ApiHttpMethod
+import com.redguard.infrastructure.security.AdminPrincipal
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -14,15 +21,20 @@ import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import java.time.Instant
+import org.springframework.web.method.support.HandlerMethodArgumentResolver
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver
 
 @WebMvcTest(ApiPolicyAdminController::class)
-@Import(ApiPolicyAdminControllerTest.TestConfig::class)
+@Import(ApiPolicyAdminControllerTest.TestConfig::class, ApiPolicyAdminControllerTest.SecurityResolverConfig::class)
 @ActiveProfiles("test")
 class ApiPolicyAdminControllerTest(
     @Autowired private val mockMvc: MockMvc,
@@ -55,6 +67,7 @@ class ApiPolicyAdminControllerTest(
                     quotaPerMonth = 2000
                 )
             )
+            with(adminAuthentication())
         }.andExpect {
             status { isCreated() }
             jsonPath("$.data.apiPattern") { value("/v1/report") }
@@ -80,6 +93,7 @@ class ApiPolicyAdminControllerTest(
         mockMvc.post("/admin/api-policies") {
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(request)
+            with(adminAuthentication())
         }.andExpect {
             status { isBadRequest() }
             jsonPath("$.code") { value("INVALID_REQUEST") }
@@ -102,6 +116,7 @@ class ApiPolicyAdminControllerTest(
     fun `삭제하면_OK를_반환한다`() {
         mockMvc.delete("/admin/api-policies/1") {
             accept = MediaType.APPLICATION_JSON
+            with(adminAuthentication())
         }.andExpect {
             status { isOk() }
             jsonPath("$.data") { value("OK") }
@@ -112,6 +127,13 @@ class ApiPolicyAdminControllerTest(
     class TestConfig {
         @Bean
         fun stubApiPolicyManagementUseCase(): StubApiPolicyManagementUseCase = StubApiPolicyManagementUseCase()
+    }
+
+    @TestConfiguration
+    class SecurityResolverConfig : WebMvcConfigurer {
+        override fun addArgumentResolvers(resolvers: MutableList<HandlerMethodArgumentResolver>) {
+            resolvers.add(AuthenticationPrincipalArgumentResolver())
+        }
     }
 
     private fun samplePolicyInfo(id: Long): ApiPolicyInfo = ApiPolicyInfo(
@@ -129,6 +151,11 @@ class ApiPolicyAdminControllerTest(
         createdAt = Instant.now(),
         updatedAt = Instant.now()
     )
+
+    private fun adminAuthentication() = run {
+        val principal = AdminPrincipal(1L, "admin", setOf(AdminRole.ADMIN))
+        authentication(UsernamePasswordAuthenticationToken(principal, null, principal.authorities))
+    }
 }
 
 class StubApiPolicyManagementUseCase : ApiPolicyManagementUseCase {
@@ -136,9 +163,9 @@ class StubApiPolicyManagementUseCase : ApiPolicyManagementUseCase {
     var nextList: List<ApiPolicyInfo> = emptyList()
     var nextException: RuntimeException? = null
 
-    override fun create(command: CreateApiPolicyCommand): ApiPolicyInfo = respond()
+    override fun create(command: CreateApiPolicyCommand, auditContext: AdminAuditContext?): ApiPolicyInfo = respond()
 
-    override fun update(policyId: Long, command: UpdateApiPolicyCommand): ApiPolicyInfo = respond()
+    override fun update(policyId: Long, command: UpdateApiPolicyCommand, auditContext: AdminAuditContext?): ApiPolicyInfo = respond()
 
     override fun get(policyId: Long): ApiPolicyInfo = respond()
 
@@ -147,7 +174,7 @@ class StubApiPolicyManagementUseCase : ApiPolicyManagementUseCase {
         return nextList
     }
 
-    override fun delete(policyId: Long) {
+    override fun delete(policyId: Long, auditContext: AdminAuditContext?) {
         nextException?.let { throw it }
     }
 

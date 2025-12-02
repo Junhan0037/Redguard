@@ -4,12 +4,16 @@ import com.redguard.api.dto.ApiResponse
 import com.redguard.api.dto.plan.PlanCreateRequest
 import com.redguard.api.dto.plan.PlanResponse
 import com.redguard.api.dto.plan.PlanUpdateRequest
+import com.redguard.application.admin.AdminAuditContext
 import com.redguard.application.plan.CreatePlanCommand
 import com.redguard.application.plan.PlanInfo
 import com.redguard.application.plan.PlanManagementUseCase
 import com.redguard.application.plan.UpdatePlanCommand
+import com.redguard.infrastructure.security.AdminPrincipal
+import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -28,9 +32,11 @@ class PlanAdminController(
 
     @PostMapping
     fun create(
-        @Valid @RequestBody request: PlanCreateRequest
+        @Valid @RequestBody request: PlanCreateRequest,
+        @AuthenticationPrincipal principal: AdminPrincipal?,
+        httpServletRequest: HttpServletRequest
     ): ResponseEntity<ApiResponse<PlanResponse>> {
-        val result = planManagementUseCase.create(request.toCommand())
+        val result = planManagementUseCase.create(request.toCommand(), buildAuditContext(principal, httpServletRequest))
         val location = URI.create("/admin/plans/${result.id}")
         return ResponseEntity.created(location).body(ApiResponse(data = result.toResponse()))
     }
@@ -47,15 +53,19 @@ class PlanAdminController(
     @PutMapping("/{planId}")
     fun update(
         @PathVariable planId: Long,
-        @Valid @RequestBody request: PlanUpdateRequest
+        @Valid @RequestBody request: PlanUpdateRequest,
+        @AuthenticationPrincipal principal: AdminPrincipal?,
+        httpServletRequest: HttpServletRequest
     ): ApiResponse<PlanResponse> =
-        ApiResponse(data = planManagementUseCase.update(planId, request.toCommand()).toResponse())
+        ApiResponse(data = planManagementUseCase.update(planId, request.toCommand(), buildAuditContext(principal, httpServletRequest)).toResponse())
 
     @DeleteMapping("/{planId}")
     fun delete(
-        @PathVariable planId: Long
+        @PathVariable planId: Long,
+        @AuthenticationPrincipal principal: AdminPrincipal?,
+        httpServletRequest: HttpServletRequest
     ): ApiResponse<String> {
-        planManagementUseCase.delete(planId)
+        planManagementUseCase.delete(planId, buildAuditContext(principal, httpServletRequest))
         return ApiResponse.empty()
     }
 
@@ -91,4 +101,17 @@ class PlanAdminController(
         createdAt = createdAt,
         updatedAt = updatedAt
     )
+
+    /**
+     * 감사 로그에 필요한 요청 컨텍스트를 구성
+     */
+    private fun buildAuditContext(principal: AdminPrincipal?, request: HttpServletRequest) = AdminAuditContext(
+        actorId = principal?.id,
+        ip = clientIp(request),
+        userAgent = request.getHeader("User-Agent")
+    )
+
+    private fun clientIp(request: HttpServletRequest): String? =
+        request.getHeader("X-Forwarded-For")?.split(",")?.firstOrNull()?.trim()
+            ?: request.remoteAddr
 }

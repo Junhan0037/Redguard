@@ -1,6 +1,10 @@
 package com.redguard.application.tenant
 
+import com.redguard.application.admin.AdminAuditContext
 import com.redguard.application.plan.PlanInfo
+import com.redguard.application.policy.PolicyAuditService
+import com.redguard.application.policy.PolicyChangeType
+import com.redguard.application.policy.PolicyResourceType
 import com.redguard.common.exception.ErrorCode
 import com.redguard.common.exception.RedGuardException
 import com.redguard.domain.plan.Plan
@@ -14,12 +18,12 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 interface TenantManagementUseCase {
-    fun create(command: CreateTenantCommand): TenantInfo
+    fun create(command: CreateTenantCommand, auditContext: AdminAuditContext? = null): TenantInfo
     fun get(tenantId: Long): TenantInfo
     fun list(): List<TenantInfo>
-    fun update(tenantId: Long, command: UpdateTenantCommand): TenantInfo
-    fun changePlan(tenantId: Long, command: ChangeTenantPlanCommand): TenantInfo
-    fun delete(tenantId: Long)
+    fun update(tenantId: Long, command: UpdateTenantCommand, auditContext: AdminAuditContext? = null): TenantInfo
+    fun changePlan(tenantId: Long, command: ChangeTenantPlanCommand, auditContext: AdminAuditContext? = null): TenantInfo
+    fun delete(tenantId: Long, auditContext: AdminAuditContext? = null)
 }
 
 /**
@@ -29,7 +33,8 @@ interface TenantManagementUseCase {
 @Service
 class TenantManagementService(
     private val tenantRepository: TenantRepository,
-    private val planRepository: PlanRepository
+    private val planRepository: PlanRepository,
+    private val policyAuditService: PolicyAuditService
 ) : TenantManagementUseCase {
 
     private val logger = KotlinLogging.logger {}
@@ -38,7 +43,7 @@ class TenantManagementService(
      * 테넌트 이름 충돌을 방지하고 유효한 요금제를 보유한 상태로 신규 생성
      */
     @Transactional
-    override fun create(command: CreateTenantCommand): TenantInfo {
+    override fun create(command: CreateTenantCommand, auditContext: AdminAuditContext?): TenantInfo {
         ensureNameAvailable(command.name)
         val plan = findPlan(command.planId)
         val tenant = Tenant(
@@ -49,6 +54,14 @@ class TenantManagementService(
 
         val savedTenant = saveSafely { tenantRepository.saveAndFlush(tenant) }
         logger.info { "테넌트를 생성했습니다 tenantId=${savedTenant.id} name=${savedTenant.name} plan=${plan.name}" }
+        policyAuditService.logPolicyChange(
+            resourceType = PolicyResourceType.TENANT_PLAN,
+            resourceId = requireNotNull(savedTenant.id).toString(),
+            changeType = PolicyChangeType.CREATED,
+            before = null,
+            after = savedTenant.toAuditPayload(),
+            auditContext = auditContext
+        )
         return savedTenant.toInfo()
     }
 
@@ -75,8 +88,9 @@ class TenantManagementService(
      * 이름 중복 검증 후 상태/이름을 원자적으로 갱신
      */
     @Transactional
-    override fun update(tenantId: Long, command: UpdateTenantCommand): TenantInfo {
+    override fun update(tenantId: Long, command: UpdateTenantCommand, auditContext: AdminAuditContext?): TenantInfo {
         val tenant = findTenantWithPlan(tenantId)
+        val beforeSnapshot = tenant.toAuditPayload()
         if (tenant.name != command.name) {
             ensureNameAvailable(command.name, tenantId)
         }
@@ -86,6 +100,14 @@ class TenantManagementService(
 
         val updatedTenant = saveSafely { tenantRepository.saveAndFlush(tenant) }
         logger.info { "테넌트 정보를 수정했습니다 tenantId=${tenant.id} status=${tenant.status} name=${tenant.name}" }
+        policyAuditService.logPolicyChange(
+            resourceType = PolicyResourceType.TENANT_PLAN,
+            resourceId = requireNotNull(updatedTenant.id).toString(),
+            changeType = PolicyChangeType.UPDATED,
+            before = beforeSnapshot,
+            after = updatedTenant.toAuditPayload(),
+            auditContext = auditContext
+        )
         return updatedTenant.toInfo()
     }
 
@@ -93,9 +115,10 @@ class TenantManagementService(
      * 동일 플랜이면 노출만, 다를 경우 요금제 변경
      */
     @Transactional
-    override fun changePlan(tenantId: Long, command: ChangeTenantPlanCommand): TenantInfo {
+    override fun changePlan(tenantId: Long, command: ChangeTenantPlanCommand, auditContext: AdminAuditContext?): TenantInfo {
         val tenant = findTenantWithPlan(tenantId)
         val targetPlan = findPlan(command.planId)
+        val beforeSnapshot = tenant.toAuditPayload()
 
         if (tenant.plan.id == targetPlan.id) {
             logger.info { "요금제 변경 요청이 현재 요금제와 동일합니다 tenantId=$tenantId plan=${targetPlan.name}" }
@@ -105,17 +128,34 @@ class TenantManagementService(
         tenant.plan = targetPlan
         val updatedTenant = saveSafely { tenantRepository.saveAndFlush(tenant) }
         logger.info { "테넌트 요금제를 변경했습니다 tenantId=$tenantId plan=${targetPlan.name}" }
+        policyAuditService.logPolicyChange(
+            resourceType = PolicyResourceType.TENANT_PLAN,
+            resourceId = tenantId.toString(),
+            changeType = PolicyChangeType.UPDATED,
+            before = beforeSnapshot,
+            after = updatedTenant.toAuditPayload(),
+            auditContext = auditContext
+        )
         return updatedTenant.toInfo()
     }
 
     @Transactional
-    override fun delete(tenantId: Long) {
+    override fun delete(tenantId: Long, auditContext: AdminAuditContext?) {
         // 하드 삭제 대신 상태를 INACTIVE로 전환해 비활성 처리
         val tenant = findTenantWithPlan(tenantId)
+        val beforeSnapshot = tenant.toAuditPayload()
         if (tenant.status != TenantStatus.INACTIVE) {
             tenant.status = TenantStatus.INACTIVE
-            saveSafely { tenantRepository.saveAndFlush(tenant) }
+            val updated = saveSafely { tenantRepository.saveAndFlush(tenant) }
             logger.info { "테넌트를 비활성화했습니다 tenantId=$tenantId" }
+            policyAuditService.logPolicyChange(
+                resourceType = PolicyResourceType.TENANT_PLAN,
+                resourceId = tenantId.toString(),
+                changeType = PolicyChangeType.DELETED,
+                before = beforeSnapshot,
+                after = updated.toAuditPayload(),
+                auditContext = auditContext
+            )
         } else {
             logger.info { "이미 비활성화된 테넌트 요청 tenantId=$tenantId" }
         }
@@ -172,5 +212,16 @@ class TenantManagementService(
         quotaPerMonth = quotaPerMonth,
         createdAt = createdAt,
         updatedAt = updatedAt
+    )
+
+    /**
+     * 감사 로그에 필요한 테넌트 스냅샷(요금제 포함)을 반환
+     */
+    private fun Tenant.toAuditPayload() = mapOf(
+        "id" to id,
+        "name" to name,
+        "status" to status.name,
+        "planId" to plan.id,
+        "planName" to plan.name
     )
 }

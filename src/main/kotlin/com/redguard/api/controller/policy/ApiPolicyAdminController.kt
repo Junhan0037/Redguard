@@ -4,14 +4,18 @@ import com.redguard.api.dto.ApiResponse
 import com.redguard.api.dto.policy.ApiPolicyCreateRequest
 import com.redguard.api.dto.policy.ApiPolicyResponse
 import com.redguard.api.dto.policy.ApiPolicyUpdateRequest
+import com.redguard.application.admin.AdminAuditContext
 import com.redguard.application.policy.ApiPolicyInfo
 import com.redguard.application.policy.ApiPolicyManagementUseCase
 import com.redguard.application.policy.ApiPolicySearchFilter
 import com.redguard.application.policy.CreateApiPolicyCommand
 import com.redguard.application.policy.UpdateApiPolicyCommand
 import com.redguard.domain.policy.ApiHttpMethod
+import com.redguard.infrastructure.security.AdminPrincipal
+import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -31,9 +35,11 @@ class ApiPolicyAdminController(
 
     @PostMapping
     fun create(
-        @Valid @RequestBody request: ApiPolicyCreateRequest
+        @Valid @RequestBody request: ApiPolicyCreateRequest,
+        @AuthenticationPrincipal principal: AdminPrincipal?,
+        httpServletRequest: HttpServletRequest
     ): ResponseEntity<ApiResponse<ApiPolicyResponse>> {
-        val result = apiPolicyManagementUseCase.create(request.toCommand())
+        val result = apiPolicyManagementUseCase.create(request.toCommand(), buildAuditContext(principal, httpServletRequest))
         val location = URI.create("/admin/api-policies/${result.id}")
         return ResponseEntity.created(location).body(ApiResponse(data = result.toResponse()))
     }
@@ -41,9 +47,11 @@ class ApiPolicyAdminController(
     @PutMapping("/{policyId}")
     fun update(
         @PathVariable policyId: Long,
-        @Valid @RequestBody request: ApiPolicyUpdateRequest
+        @Valid @RequestBody request: ApiPolicyUpdateRequest,
+        @AuthenticationPrincipal principal: AdminPrincipal?,
+        httpServletRequest: HttpServletRequest
     ): ApiResponse<ApiPolicyResponse> =
-        ApiResponse(data = apiPolicyManagementUseCase.update(policyId, request.toCommand()).toResponse())
+        ApiResponse(data = apiPolicyManagementUseCase.update(policyId, request.toCommand(), buildAuditContext(principal, httpServletRequest)).toResponse())
 
     @GetMapping("/{policyId}")
     fun get(
@@ -71,9 +79,11 @@ class ApiPolicyAdminController(
 
     @DeleteMapping("/{policyId}")
     fun delete(
-        @PathVariable policyId: Long
+        @PathVariable policyId: Long,
+        @AuthenticationPrincipal principal: AdminPrincipal?,
+        httpServletRequest: HttpServletRequest
     ): ApiResponse<String> {
-        apiPolicyManagementUseCase.delete(policyId)
+        apiPolicyManagementUseCase.delete(policyId, buildAuditContext(principal, httpServletRequest))
         return ApiResponse.empty()
     }
 
@@ -118,4 +128,17 @@ class ApiPolicyAdminController(
         createdAt = createdAt,
         updatedAt = updatedAt
     )
+
+    /**
+     * 감사 목적의 요청 컨텍스트를 구성
+     */
+    private fun buildAuditContext(principal: AdminPrincipal?, request: HttpServletRequest) = AdminAuditContext(
+        actorId = principal?.id,
+        ip = clientIp(request),
+        userAgent = request.getHeader("User-Agent")
+    )
+
+    private fun clientIp(request: HttpServletRequest): String? =
+        request.getHeader("X-Forwarded-For")?.split(",")?.firstOrNull()?.trim()
+            ?: request.remoteAddr
 }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.redguard.api.dto.tenant.TenantCreateRequest
 import com.redguard.api.dto.tenant.TenantPlanChangeRequest
 import com.redguard.api.dto.tenant.TenantUpdateRequest
+import com.redguard.application.admin.AdminAuditContext
 import com.redguard.application.plan.PlanInfo
 import com.redguard.application.tenant.ChangeTenantPlanCommand
 import com.redguard.application.tenant.CreateTenantCommand
@@ -12,7 +13,9 @@ import com.redguard.application.tenant.TenantManagementUseCase
 import com.redguard.application.tenant.UpdateTenantCommand
 import com.redguard.common.exception.ErrorCode
 import com.redguard.common.exception.RedGuardException
+import com.redguard.domain.admin.AdminRole
 import com.redguard.domain.tenant.TenantStatus
+import com.redguard.infrastructure.security.AdminPrincipal
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -21,12 +24,17 @@ import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.*
 import java.time.Instant
+import org.springframework.web.method.support.HandlerMethodArgumentResolver
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver
 
 @WebMvcTest(TenantAdminController::class)
-@Import(TenantAdminControllerTest.TestConfig::class)
+@Import(TenantAdminControllerTest.TestConfig::class, TenantAdminControllerTest.SecurityResolverConfig::class)
 @ActiveProfiles("test")
 class TenantAdminControllerTest(
     @Autowired private val mockMvc: MockMvc,
@@ -52,6 +60,7 @@ class TenantAdminControllerTest(
                     status = TenantStatus.ACTIVE
                 )
             )
+            with(adminAuthentication())
         }.andExpect {
             status { isCreated() }
             header { string("Location", "/admin/tenants/1") }
@@ -72,6 +81,7 @@ class TenantAdminControllerTest(
         mockMvc.post("/admin/tenants") {
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(request)
+            with(adminAuthentication())
         }.andExpect {
             status { isBadRequest() }
             jsonPath("$.code") { value("INVALID_REQUEST") }
@@ -87,6 +97,7 @@ class TenantAdminControllerTest(
             content = objectMapper.writeValueAsString(
                 TenantPlanChangeRequest(planId = 20L)
             )
+            with(adminAuthentication())
         }.andExpect {
             status { isOk() }
             jsonPath("$.data.plan.name") { value("ENTERPRISE") }
@@ -109,6 +120,7 @@ class TenantAdminControllerTest(
     fun `삭제하면_OK_응답을_반환한다`() {
         mockMvc.delete("/admin/tenants/1") {
             accept = MediaType.APPLICATION_JSON
+            with(adminAuthentication())
         }.andExpect {
             status { isOk() }
             jsonPath("$.data") { value("OK") }
@@ -140,10 +152,22 @@ class TenantAdminControllerTest(
         updatedAt = Instant.now()
     )
 
+    private fun adminAuthentication() = run {
+        val principal = AdminPrincipal(1L, "admin", setOf(AdminRole.ADMIN))
+        authentication(UsernamePasswordAuthenticationToken(principal, null, principal.authorities))
+    }
+
     @TestConfiguration
     class TestConfig {
         @Bean
         fun stubTenantManagementUseCase(): StubTenantManagementUseCase = StubTenantManagementUseCase()
+    }
+
+    @TestConfiguration
+    class SecurityResolverConfig : WebMvcConfigurer {
+        override fun addArgumentResolvers(resolvers: MutableList<HandlerMethodArgumentResolver>) {
+            resolvers.add(AuthenticationPrincipalArgumentResolver())
+        }
     }
 }
 
@@ -152,7 +176,7 @@ class StubTenantManagementUseCase : TenantManagementUseCase {
     var nextList: List<TenantInfo> = emptyList()
     var nextException: RuntimeException? = null
 
-    override fun create(command: CreateTenantCommand): TenantInfo = respond()
+    override fun create(command: CreateTenantCommand, auditContext: AdminAuditContext?): TenantInfo = respond()
 
     override fun get(tenantId: Long): TenantInfo = respond()
 
@@ -161,11 +185,11 @@ class StubTenantManagementUseCase : TenantManagementUseCase {
         return nextList
     }
 
-    override fun update(tenantId: Long, command: UpdateTenantCommand): TenantInfo = respond()
+    override fun update(tenantId: Long, command: UpdateTenantCommand, auditContext: AdminAuditContext?): TenantInfo = respond()
 
-    override fun changePlan(tenantId: Long, command: ChangeTenantPlanCommand): TenantInfo = respond()
+    override fun changePlan(tenantId: Long, command: ChangeTenantPlanCommand, auditContext: AdminAuditContext?): TenantInfo = respond()
 
-    override fun delete(tenantId: Long) {
+    override fun delete(tenantId: Long, auditContext: AdminAuditContext?) {
         nextException?.let { throw it }
     }
 

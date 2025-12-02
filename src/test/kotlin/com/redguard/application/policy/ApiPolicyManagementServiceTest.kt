@@ -1,5 +1,8 @@
 package com.redguard.application.policy
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.redguard.application.admin.AdminAuditLogger
 import com.redguard.common.exception.ErrorCode
 import com.redguard.common.exception.RedGuardException
 import com.redguard.domain.plan.Plan
@@ -15,12 +18,20 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
+import org.springframework.boot.test.context.TestConfiguration
+import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
 
 @DataJpaTest
 @ActiveProfiles("test")
-@Import(ApiPolicyManagementService::class, JpaConfig::class)
+@Import(
+    ApiPolicyManagementService::class,
+    PolicyAuditService::class,
+    AdminAuditLogger::class,
+    JpaConfig::class,
+    ApiPolicyManagementServiceTest.TestConfig::class
+)
 class ApiPolicyManagementServiceTest(
     @Autowired private val apiPolicyManagementService: ApiPolicyManagementService,
     @Autowired private val planRepository: PlanRepository,
@@ -151,6 +162,12 @@ class ApiPolicyManagementServiceTest(
 
         assertThat(exception.errorCode).isEqualTo(ErrorCode.INVALID_REQUEST)
         assertThat(apiPolicyRepository.findAll()).hasSize(1)
+    }
+
+    @TestConfiguration
+    class TestConfig {
+        @Bean
+        fun objectMapper(): ObjectMapper = jacksonObjectMapper()
     }
 
     private fun samplePlan(name: String) = Plan(

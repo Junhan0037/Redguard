@@ -1,10 +1,11 @@
 package com.redguard.application.policy
 
+import com.redguard.application.admin.AdminAuditContext
 import com.redguard.common.exception.ErrorCode
 import com.redguard.common.exception.RedGuardException
+import com.redguard.domain.plan.Plan
 import com.redguard.domain.plan.PlanRepository
 import com.redguard.domain.policy.ApiHttpMethod
-import com.redguard.domain.plan.Plan
 import com.redguard.domain.policy.ApiPolicy
 import com.redguard.domain.policy.ApiPolicyRepository
 import com.redguard.domain.tenant.Tenant
@@ -16,11 +17,11 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 interface ApiPolicyManagementUseCase {
-    fun create(command: CreateApiPolicyCommand): ApiPolicyInfo
-    fun update(policyId: Long, command: UpdateApiPolicyCommand): ApiPolicyInfo
+    fun create(command: CreateApiPolicyCommand, auditContext: AdminAuditContext? = null): ApiPolicyInfo
+    fun update(policyId: Long, command: UpdateApiPolicyCommand, auditContext: AdminAuditContext? = null): ApiPolicyInfo
     fun get(policyId: Long): ApiPolicyInfo
     fun search(filter: ApiPolicySearchFilter): List<ApiPolicyInfo>
-    fun delete(policyId: Long)
+    fun delete(policyId: Long, auditContext: AdminAuditContext? = null)
 }
 
 /**
@@ -30,13 +31,14 @@ interface ApiPolicyManagementUseCase {
 class ApiPolicyManagementService(
     private val apiPolicyRepository: ApiPolicyRepository,
     private val tenantRepository: TenantRepository,
-    private val planRepository: PlanRepository
+    private val planRepository: PlanRepository,
+    private val policyAuditService: PolicyAuditService
 ) : ApiPolicyManagementUseCase {
 
     private val logger = KotlinLogging.logger {}
 
     @Transactional
-    override fun create(command: CreateApiPolicyCommand): ApiPolicyInfo {
+    override fun create(command: CreateApiPolicyCommand, auditContext: AdminAuditContext?): ApiPolicyInfo {
         val target = validateAndResolveTarget(command.tenantId, command.planId)
         ensureUniquePolicy(target.tenantId, target.planId, command.httpMethod, command.apiPattern, null)
 
@@ -55,12 +57,21 @@ class ApiPolicyManagementService(
 
         val saved = saveSafely { apiPolicyRepository.saveAndFlush(entity) }
         logger.info { "ApiPolicy를 생성했습니다 policyId=${saved.id} tenantId=${saved.tenant?.id} planId=${saved.plan?.id} method=${saved.httpMethod} pattern=${saved.apiPattern}" }
+        policyAuditService.logPolicyChange(
+            resourceType = PolicyResourceType.API_POLICY,
+            resourceId = requireNotNull(saved.id).toString(),
+            changeType = PolicyChangeType.CREATED,
+            before = null,
+            after = saved.toAuditPayload(),
+            auditContext = auditContext
+        )
         return saved.toInfo()
     }
 
     @Transactional
-    override fun update(policyId: Long, command: UpdateApiPolicyCommand): ApiPolicyInfo {
+    override fun update(policyId: Long, command: UpdateApiPolicyCommand, auditContext: AdminAuditContext?): ApiPolicyInfo {
         val policy = findPolicy(policyId)
+        val beforeSnapshot = policy.toAuditPayload()
         val target = validateAndResolveTarget(command.tenantId, command.planId)
         ensureUniquePolicy(target.tenantId, target.planId, command.httpMethod, command.apiPattern, policyId)
 
@@ -77,6 +88,14 @@ class ApiPolicyManagementService(
 
         val updated = saveSafely { apiPolicyRepository.saveAndFlush(policy) }
         logger.info { "ApiPolicy를 수정했습니다 policyId=${policy.id} tenantId=${policy.tenant?.id} planId=${policy.plan?.id} method=${policy.httpMethod} pattern=${policy.apiPattern}" }
+        policyAuditService.logPolicyChange(
+            resourceType = PolicyResourceType.API_POLICY,
+            resourceId = requireNotNull(updated.id).toString(),
+            changeType = PolicyChangeType.UPDATED,
+            before = beforeSnapshot,
+            after = updated.toAuditPayload(),
+            auditContext = auditContext
+        )
         return updated.toInfo()
     }
 
@@ -92,10 +111,19 @@ class ApiPolicyManagementService(
     }
 
     @Transactional
-    override fun delete(policyId: Long) {
+    override fun delete(policyId: Long, auditContext: AdminAuditContext?) {
         val policy = findPolicy(policyId)
+        val beforeSnapshot = policy.toAuditPayload()
         apiPolicyRepository.delete(policy)
         logger.info { "ApiPolicy를 삭제했습니다 policyId=$policyId" }
+        policyAuditService.logPolicyChange(
+            resourceType = PolicyResourceType.API_POLICY,
+            resourceId = policyId.toString(),
+            changeType = PolicyChangeType.DELETED,
+            before = beforeSnapshot,
+            after = null,
+            auditContext = auditContext
+        )
     }
 
     private fun validateAndResolveTarget(tenantId: Long?, planId: Long?): PolicyTarget {
@@ -175,6 +203,23 @@ class ApiPolicyManagementService(
         quotaPerMonth = quotaPerMonth,
         createdAt = createdAt,
         updatedAt = updatedAt
+    )
+
+    /**
+     * 감사 로그 및 구조화 로그에서 사용할 정책 스냅샷을 생성
+     */
+    private fun ApiPolicy.toAuditPayload() = mapOf(
+        "id" to id,
+        "tenantId" to tenant?.id,
+        "planId" to plan?.id,
+        "httpMethod" to httpMethod.name,
+        "apiPattern" to apiPattern,
+        "description" to description,
+        "rateLimitPerSecond" to rateLimitPerSecond,
+        "rateLimitPerMinute" to rateLimitPerMinute,
+        "rateLimitPerDay" to rateLimitPerDay,
+        "quotaPerDay" to quotaPerDay,
+        "quotaPerMonth" to quotaPerMonth
     )
 
     /**

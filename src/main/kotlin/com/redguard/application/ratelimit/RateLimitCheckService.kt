@@ -16,7 +16,8 @@ import org.springframework.stereotype.Service
 @Service
 class RateLimitCheckService(
     private val rateLimitEngine: RateLimitEngine,
-    private val rateLimitMetricsPublisher: RateLimitMetricsPublisher
+    private val rateLimitMetricsPublisher: RateLimitMetricsPublisher,
+    private val limitHitAuditService: LimitHitAuditService
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -48,7 +49,9 @@ class RateLimitCheckService(
         rateLimitMetricsPublisher.record(command, result)
 
         if (!result.allowed) {
-            logger.info { "Rate limit 차단: decision=$decision scope=${command.scope} tenant=${command.tenantId} api=${command.apiPath}" }
+            // 차단된 요청은 구조화 로그 및 DB 감사 로그를 함께 남겨 추적 가능성을 확보
+            limitHitAuditService.recordLimitExceeded(command, result)
+            logger.info { "Rate limit 차단 발생 decision=$decision scope=${command.scope} tenant=${command.tenantId} api=${command.apiPath}" }
         }
 
         return result
