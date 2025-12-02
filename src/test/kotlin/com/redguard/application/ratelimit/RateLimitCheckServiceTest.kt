@@ -9,6 +9,8 @@ import com.redguard.infrastructure.redis.WindowResult
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.never
+import org.mockito.Mockito.verify
 import java.time.Instant
 
 class RateLimitCheckServiceTest {
@@ -140,4 +142,64 @@ class RateLimitCheckServiceTest {
      */
     private fun createService(engine: RateLimitEngine): RateLimitCheckService =
         RateLimitCheckService(engine, NoopRateLimitMetricsPublisher(), mock(LimitHitAuditService::class.java))
+
+    @Test
+    fun `차단된_요청이면_감사로거를_호출한다`() {
+        val engine = StubRateLimitEngine(
+            RateLimitScriptResult(
+                second = WindowResult(false, 3, 3, 0),
+                minute = null,
+                day = null,
+                dailyQuota = null,
+                monthlyQuota = null,
+                fallbackApplied = false
+            )
+        )
+        val auditService = mock(LimitHitAuditService::class.java)
+        val service = RateLimitCheckService(engine, NoopRateLimitMetricsPublisher(), auditService)
+        val command = RateLimitCheckCommand(
+            scope = RateLimitScope.TENANT_API,
+            tenantId = "tenant-1",
+            userId = "user-1",
+            apiPath = "/v1/report",
+            httpMethod = ApiHttpMethod.GET,
+            timestamp = Instant.now(),
+            policy = RateLimitPolicySnapshot(limitPerSecond = 1)
+        )
+
+        val result = service.check(command)
+
+        assertFalse(result.allowed)
+        verify(auditService).recordLimitExceeded(command, result)
+    }
+
+    @Test
+    fun `허용된_요청이면_감사로거를_호출하지_않는다`() {
+        val engine = StubRateLimitEngine(
+            RateLimitScriptResult(
+                second = WindowResult(true, 1, 1, 0),
+                minute = null,
+                day = null,
+                dailyQuota = null,
+                monthlyQuota = null,
+                fallbackApplied = false
+            )
+        )
+        val auditService = mock(LimitHitAuditService::class.java)
+        val service = RateLimitCheckService(engine, NoopRateLimitMetricsPublisher(), auditService)
+        val command = RateLimitCheckCommand(
+            scope = RateLimitScope.TENANT_API,
+            tenantId = "tenant-1",
+            userId = "user-1",
+            apiPath = "/v1/report",
+            httpMethod = ApiHttpMethod.GET,
+            timestamp = Instant.now(),
+            policy = RateLimitPolicySnapshot(limitPerSecond = 5)
+        )
+
+        val result = service.check(command)
+
+        assertTrue(result.allowed)
+        verify(auditService, never()).recordLimitExceeded(command, result)
+    }
 }

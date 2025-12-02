@@ -16,8 +16,6 @@ management:
     health:
       probes:
         enabled: true
-
-management:
   metrics:
     export:
       prometheus:
