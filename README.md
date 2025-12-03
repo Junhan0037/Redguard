@@ -1,12 +1,20 @@
 # RedGuard — 멀티테넌트 Rate Limit & Quota 플랫폼
 
+![Kotlin](https://shields.io/badge/kotlin-black?logo=kotlin&style=for-the-badge%22)
+![SpringBoot](https://shields.io/badge/springboot-black?logo=springboot&style=for-the-badge%22)
+![Redis](https://shields.io/badge/redis-black?logo=redis&style=for-the-badge%22)
+![Postgresql](https://shields.io/badge/postgresql-black?logo=postgresql&style=for-the-badge%22)
+![Docker](https://shields.io/badge/docker-black?logo=docker&style=for-the-badge%22)
+![Flyway](https://shields.io/badge/flyway-black?logo=flyway&style=for-the-badge%22)
+![Prometheus](https://shields.io/badge/prometheus-black?logo=prometheus&style=for-the-badge%22)
+
 ![RedGuard.png](./images/RedGuard.png)
 
 ## 개요
 - 테넌트/유저/엔드포인트 단위 초·분·일 Rate Limit와 월 Quota를 관리하는 Kotlin + Spring Boot 기반 서비스입니다.
 - Redis 중앙 스토어(2-버킷 슬라이딩 윈도우 + Lua)로 멀티 인스턴스 환경에서 일관된 제한을 제공합니다.
 - PostgreSQL + JPA로 정책/사용량/감사 로그를 관리하고, Admin RBAC와 JWT 기반 인증을 제공합니다.
-- 설계의 단일 소스는 `etc/project.md`이며, 운영/연동 가이드는 `docs/` 및 `etc/` 문서를 참조합니다.
+- 운영/연동 가이드는 `docs/` 문서를 참조합니다.
 
 ## 프로젝트 배경·목표
 - B2B 멀티테넌트 환경에서 테넌트·유저·엔드포인트별로 다른 초/분/일 Rate Limit와 월 Quota를 적용해야 하는 요구를 해결합니다.
