@@ -1,12 +1,4 @@
-# RedGuard — 멀티테넌트 Rate Limit & Quota 플랫폼
-
-![Kotlin](https://shields.io/badge/kotlin-black?logo=kotlin&style=for-the-badge%22)
-![SpringBoot](https://shields.io/badge/springboot-black?logo=springboot&style=for-the-badge%22)
-![Redis](https://shields.io/badge/redis-black?logo=redis&style=for-the-badge%22)
-![Postgresql](https://shields.io/badge/postgresql-black?logo=postgresql&style=for-the-badge%22)
-![Docker](https://shields.io/badge/docker-black?logo=docker&style=for-the-badge%22)
-![Flyway](https://shields.io/badge/flyway-black?logo=flyway&style=for-the-badge%22)
-![Prometheus](https://shields.io/badge/prometheus-black?logo=prometheus&style=for-the-badge%22)
+# 멀티테넌트 Rate Limit & Quota 플랫폼
 
 ![RedGuard.png](./images/RedGuard.png)
 
